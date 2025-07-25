@@ -1,10 +1,10 @@
 &run
-   n_agents = 10000
-   n_steps  = 1000
-   init_cash = 50.0
-   debt_limit = 0.0
-   exchange_delta = 1.0
-   flip_prob = 0.01
-   seed = 987654
-   write_every = 100
+n_agents = 10000
+n_steps  = 1000
+init_cash = 50.0
+debt_limit = 0.0
+exchange_delta = 1.0
+flip_prob = 0.01
+seed = 987654
+write_every = 100
 /

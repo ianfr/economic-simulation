@@ -20,7 +20,7 @@ module sim_base_m
     end type AbstractSimulator
 
     abstract interface
-        subroutine init_sim_iface(this, cfg)   
+        subroutine init_sim_iface(this, cfg)
             import :: AbstractSimulator, AbstractConfig
             class(AbstractSimulator), intent(out) :: this
             class(AbstractConfig), intent(in)          :: cfg
@@ -56,23 +56,23 @@ contains
         character(*), intent(in) :: filename
         character(len=32), allocatable :: names(:)
         integer :: unit, ios, i
-        
+
         names = this % get_metric_names()
-        
-        open(newunit=unit, file=filename, status='replace', action='write', iostat=ios)
+
+        open (newunit=unit, file=filename, status='replace', action='write', iostat=ios)
         if (ios /= 0) then
-            write(*,'(a,a)') 'Error opening metrics file: ', filename
+            write (*, '(a,a)') 'Error opening metrics file: ', filename
             return
         end if
-        
+
         ! Write CSV header
-        write(unit, '(a)', advance='no') 'timestep'
+        write (unit, '(a)', advance='no') 'timestep'
         do i = 1, size(names)
-            write(unit, '(a,a)', advance='no') ',', trim(names(i))
+            write (unit, '(a,a)', advance='no') ',', trim(names(i))
         end do
-        write(unit, '()')  ! newline
-        
-        close(unit)
+        write (unit, '()')  ! newline
+
+        close (unit)
     end subroutine write_metrics_header
 
     !------------------------------------------------------------
@@ -86,33 +86,33 @@ contains
         integer :: unit, ios, i
         logical :: file_exists
 
-        print*, 'Writing metrics for timestep:', timestep, "..."
-        
+        print *, 'Writing metrics for timestep:', timestep, "..."
+
         metrics = this % compute_metrics()
-        
+
         ! Check if file exists to determine if we need to append
-        inquire(file=filename, exist=file_exists)
-        
+        inquire (file=filename, exist=file_exists)
+
         if (file_exists) then
-            open(newunit=unit, file=filename, status='old', position='append', action='write', iostat=ios)
+            open (newunit=unit, file=filename, status='old', position='append', action='write', iostat=ios)
         else
-            open(newunit=unit, file=filename, status='new', action='write', iostat=ios)
+            open (newunit=unit, file=filename, status='new', action='write', iostat=ios)
         end if
-        
+
         if (ios /= 0) then
-            write(*,'(a,a)') 'Error opening metrics file: ', filename
+            write (*, '(a,a)') 'Error opening metrics file: ', filename
             return
         end if
-        
-        ! Write timestep and metrics
-        write(unit, '(i0)', advance='no') timestep
-        do i = 1, size(metrics)
-            write(unit, '(a,f0.6)', advance='no') ',', metrics(i)
-        end do
-        write(unit, '()')  ! newline
-        
-        close(unit)
 
-        print*, "...done writing metrics."
+        ! Write timestep and metrics
+        write (unit, '(i0)', advance='no') timestep
+        do i = 1, size(metrics)
+            write (unit, '(a,f0.6)', advance='no') ',', metrics(i)
+        end do
+        write (unit, '()')  ! newline
+
+        close (unit)
+
+        print *, "...done writing metrics."
     end subroutine write_metrics_csv
 end module sim_base_m

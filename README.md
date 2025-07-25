@@ -58,13 +58,16 @@ The fortran package manager (v0.12.0+) is assumed to be installed at ~/fpm
 | arm64 Ubuntu 24.04       | ❓       | ❓ CPU                    | 
 
 The Nvidia compiler is reccomended, however compatibility is maintained with the open-source `gfortran` compiler to be in line with JOSS reccomendations.
-- To get an updated gfortran, create a `conda` environment and run: `conda install -c conda-forge gfortran=15.1.0`
+- To get an updated gfortran, create a `conda` environment and run: 
+    - `conda install -c conda-forge gfortran=15.1.0`
+    - `conda install conda-forge::hdf5`
 
 Compilation notes:
 - To build with CPU parallelism instead of GPU with `nvfortran`, swap the commented out lines in nvfortran-environment-vars.sh
 - To build with `gfortran` with CPU parallelism, use `source gfortran-environment-vars.sh && ~/fpm build`
     - Set the number of cores used with GFORT_N_CORES in gfortran-environment-vars.sh
     - Set the gfortran 15.1+ compiler path in gfortran-environment-vars.sh
+- View `nvfortran` optimization printouts: `source nvfortran-environment-vars.sh && ~/fpm clean && rm -f compile.txt && ~/fpm build --verbose &> compile.txt`
 
 (Optional) for a better development experience use the Modern Fortran VS Code extension. On the main development machine the fortran language server is located in a conda env here: /home/linuxuser/miniconda3/envs/fortran-fortls along with fprettify for code formatting.
 
@@ -102,7 +105,10 @@ Continue going through reference (3) and identify more prebuilt models to includ
 - Benchmarks: gfortran cpu (serial) vs nvidia cpu (parallel) vs nvidia gpu
 - Update the sim_factory_m module with another routine to construct simulators without file I/O
 - Add some initial tests. Will likely need to expand the `AbtractSimulation` interface with some "test_" helper routines
-- Add instructions for building gcc 15.1 with the gcc 15.1 docker container
+- Custom HDF5-like binary format instead of CSV for population data 
+    - Folder containing binary files
+    - Each binary file is directly an unformatted array that was formerly a CSV column
+    - Should be readable with numpy np.fromfile
 
 ## References
 

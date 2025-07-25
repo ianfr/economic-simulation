@@ -9,6 +9,7 @@ module model_ccm_exchange_m
     use rng_m
     use sim_base_m
     use abm_metrics_m
+    ! use h5fortran
     implicit none
     public ! public by default, Agent below is private
 
@@ -38,6 +39,7 @@ module model_ccm_exchange_m
 
         ! Private helper methods
         procedure, private :: gini_coefficient
+        ! procedure, private :: write_population_hdf5
     end type CCMExchange
 contains
     subroutine init(this, cfg)
@@ -148,6 +150,7 @@ contains
 
         end do
     end subroutine step
+
     !------------------------------------------------------------
     subroutine write_population_csv(this, filename)
         class(CCMExchange), intent(in) :: this
@@ -171,6 +174,16 @@ contains
         close (unit)
         write (*, '(a,a)') 'Population data written to: ', filename
     end subroutine write_population_csv
+
+    !------------------------------------------------------------
+    ! subroutine write_population_hdf5(this, filename)
+    !     class(CCMExchange), intent(in) :: this
+    !     character(*), intent(in) :: filename
+
+    !     call h5write(filename, '/cash', this % pop % cash)
+    !     call h5write(filename, '/saving_propensity', this % pop % saving_propensity)
+
+    ! end subroutine write_population_hdf5
 
     !------------------------------------------------------------
     function compute_metrics(this) result(metrics)

@@ -5,8 +5,10 @@
 export FPM_FC=/home/linuxuser/miniconda3/envs/gfortran/bin/gfortran
 
 ### Set the Fortran compiler flags
-export GFORT_N_CORES=4
+export GFORT_N_CORES=8
 export FPM_FFLAGS="-O2 -cpp -Wall -Werror -Wextra --tree-parallelize-loops=$GFORT_N_CORES -free -ffree-line-length-512"
+# Use the conda environment's include and lib directories for HDF5 & dependencies
+export FPM_FFLAGS="$FPM_FFLAGS -L/home/linuxuser/miniconda3/envs/gfortran/lib -I/home/linuxuser/miniconda3/envs/gfortran/include"
 
 # For debugging, you might want to use:
 # export FPM_FFLAGS="-O0 -g -cpp -Wall -Werror -Wextra -free"

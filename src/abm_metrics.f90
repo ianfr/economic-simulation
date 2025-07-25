@@ -9,24 +9,24 @@ module abm_metrics_m
     ! Define an explicit interface for libc's qsort to maintain compatibility with gfortran
     ! https://gcc.gnu.org/onlinedocs/gcc-9.4.0/gfortran/Preprocessing-and-conditional-compilation.html
     ! Apparently ifdef etc. can't be indented https://fortran-lang.discourse.group/t/problem-using-c-preprocessor-with-gfortran/64
-  interface
-    subroutine qsort(base, nel, width, compar) bind(c, name='qsort')
-      import c_size_t, c_int
-      implicit none
-      type(*), intent(inout) :: base(*)
-      integer(c_size_t), value :: nel
-      integer(c_size_t), value :: width
-      abstract interface
-        function compar_iface(a, b) bind(c)
-          import c_int, c_ptr
-          implicit none
-          integer(c_int) compar_iface
-          type(c_ptr), value :: a, b
-        end function
-      end interface
-      procedure(compar_iface) compar
-    end subroutine
-  end interface
+    interface
+        subroutine qsort(base, nel, width, compar) bind(c, name='qsort')
+            import c_size_t, c_int
+            implicit none
+            type(*), intent(inout) :: base(*)
+            integer(c_size_t), value :: nel
+            integer(c_size_t), value :: width
+            abstract interface
+                function compar_iface(a, b) bind(c)
+                    import c_int, c_ptr
+                    implicit none
+                    integer(c_int) compar_iface
+                    type(c_ptr), value :: a, b
+                end function
+            end interface
+            procedure(compar_iface) compar
+        end subroutine
+    end interface
 #endif
 
 contains
@@ -53,16 +53,16 @@ contains
 
     !------------------------------------------------------------
     ! Sorting utility function with associated comparison operator
-    integer function sort_compar_op(a,b)
-            real(rk) :: a, b
-            if (a < b) then
-                sort_compar_op = -1
-            else if (a > b) then
-                sort_compar_op = 1
-            else
-                sort_compar_op = 0
-            end if
-            return
+    integer function sort_compar_op(a, b)
+        real(rk) :: a, b
+        if (a < b) then
+            sort_compar_op = -1
+        else if (a > b) then
+            sort_compar_op = 1
+        else
+            sort_compar_op = 0
+        end if
+        return
     end function sort_compar_op
     subroutine sort_real_array(arr)
         real(rk), intent(inout) :: arr(:)
@@ -84,7 +84,7 @@ contains
         real(rk) :: sum_weighted, mean_cash
 
         n = size(cash_values)
-        allocate(cash_sorted(n))
+        allocate (cash_sorted(n))
 
         ! Copy cash Rvalues
         cash_sorted = cash_values

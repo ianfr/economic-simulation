@@ -1,8 +1,8 @@
 !===============================================================
-! simple_exchange.f90
-! Simple exchange simulation implementation
+! model_ccm_exchange.f90
+! Chakraborti and Chakrabarti 'saved wealth' model with random individual saving propensities
 !===============================================================
-module model_simple_exchange_m
+module model_ccm_exchange_m
     use kinds_m
     use abstract_config_m
     use config_m
@@ -16,10 +16,11 @@ module model_simple_exchange_m
     private :: Agent
     type :: Agent
         real(rk) :: cash = 0.0_rk
+        real(rk) :: saving_propensity = 0.0_rk ! Individual saving propensity
     end type Agent
 
     ! The concrete simulation class
-    type, extends(AbstractSimulator) :: SimpleExchange
+    type, extends(AbstractSimulator) :: CCMExchange
         type(Agent), allocatable :: pop(:)
         character(len=32), allocatable :: names(:)  ! Metric names
         integer(int64)           :: n_steps = 0
@@ -37,19 +38,23 @@ module model_simple_exchange_m
 
         ! Private helper methods
         procedure, private :: gini_coefficient
-    end type SimpleExchange
+    end type CCMExchange
 contains
     subroutine init(this, cfg)
-        class(SimpleExchange), intent(out) :: this
+        class(CCMExchange), intent(out) :: this
         class(AbstractConfig), intent(in)  :: cfg
         integer(int64) :: i
+        real(rk) :: rnd_prop_uni
 
         select type (cfg)
-        type is (Config_SimpleExchange)
+        type is (Config_CCMExchange)
             call init_rng(cfg % seed)
             allocate (this % pop(cfg % n_agents))
-            do concurrent(i=1:cfg % n_agents)
+            do i = 1, cfg % n_agents
                 this % pop(i) % cash = cfg % init_cash
+                call random_number(rnd_prop_uni)
+                this % pop(i) % saving_propensity = (rnd_prop_uni * (cfg % max_saving_propensity - cfg % min_saving_propensity + 1)) + cfg % min_saving_propensity
+                ! this % pop(i) % saving_propensity = random_real(cfg % min_saving_propensity, cfg % max_saving_propensity)
             end do
             this % n_steps = cfg % n_steps
             this % write_every = cfg % write_every
@@ -64,7 +69,7 @@ contains
     end subroutine init
     !------------------------------------------------------------
     subroutine run(this)
-        class(SimpleExchange), intent(inout) :: this
+        class(CCMExchange), intent(inout) :: this
         integer(int64) :: t, i
         character(len=20) :: filename
         character(len=30) :: metrics_filename
@@ -92,27 +97,60 @@ contains
         write (*, '("Average cash = ",f10.4)') sum([(this % pop(i) % cash, i=1, size(this % pop))]) &
             / real(size(this % pop), rk)
     end subroutine run
+
     !------------------------------------------------------------
+    ! Transition matrix:
+    !       | lambda_i + eps*(1-lambda_i)      eps*(1-lambda_j)             |
+    !       | (1-eps)*(1-lambda_i)          lambda_j + (1-eps)*(1-lambda_j) |
+    !       where lambda is the saving propensity, and eps on [0,1] is randomly chose for every exchange
     subroutine step(this)
-        class(SimpleExchange), intent(inout) :: this
+        class(CCMExchange), intent(inout) :: this
         integer :: n_pairs, p, i, j
         integer, allocatable :: perm(:)
+        real(rk) :: lambda_i, lambda_j, cash_i, cash_j
+        real(rk), allocatable :: eps(:)
+
+        ! Generate the random set of pairs of agents
         n_pairs = size(this % pop) / 2
         allocate (perm(size(this % pop)))
         perm = [(i, i=1, size(this % pop))]
         call shuffle_int(perm)
-        do concurrent(p=1:n_pairs)
-            i = perm(2 * p - 1); j = perm(2 * p)
-            ! Check if agent i can afford the transaction (cash >= debt_limit + exchange_delta)
-            if (this % pop(i) % cash >= -this % debt_limit + this % exchange_delta) then
-                this % pop(i) % cash = this % pop(i) % cash - this % exchange_delta
-                this % pop(j) % cash = this % pop(j) % cash + this % exchange_delta
-            end if
+
+        ! Generate the eps values for each pair randomly
+        allocate (eps(n_pairs))
+        call random_number(eps)
+
+        ! NOT NEEDED WITH THE GFORTRAN 15.1 UPDATE
+        ! For now, run serially with gfortran since it doesn't support `do concurrent` locality yet
+        ! https://fortran-lang.discourse.group/t/do-concurrent-can-loop-variable-be-specified-in-local/8396/2
+        ! https://gcc.gnu.org/bugzilla/show_bug.cgi?id=101602
+! #ifdef __GFORTRAN__
+!         do p = 1, n_pairs
+! #else
+        do concurrent(p=1:n_pairs) local(lambda_i, lambda_j, cash_i, cash_j)
+! #endif
+            i = perm(2 * p - 1)
+            j = perm(2 * p)
+
+            lambda_i = this % pop(i) % saving_propensity
+            lambda_j = this % pop(j) % saving_propensity
+
+            cash_i = this % pop(i) % cash
+            cash_j = this % pop(j) % cash
+
+            ! Calculate the new cash values after exchange
+            ! TODO: Double-check the formula correctness based on the matrix above
+            this % pop(i) % cash = cash_i * (lambda_i + eps(p) * (1.0_rk - lambda_i)) + cash_j * (1.0_rk - eps(p)) * (1.0_rk - lambda_j)
+            this % pop(j) % cash = cash_j * (lambda_j + (1.0_rk - eps(p)) * (1.0_rk - lambda_j)) + cash_i * (1.0_rk - eps(p)) * (1.0_rk - lambda_i)
+
+            ! TODO: Do we want a debt limit check here?
+            ! If the cash went below the limit, reset it using cash_i and cash_j
+
         end do
     end subroutine step
     !------------------------------------------------------------
     subroutine write_population_csv(this, filename)
-        class(SimpleExchange), intent(in) :: this
+        class(CCMExchange), intent(in) :: this
         character(*), intent(in) :: filename
         integer :: unit, i, ios
 
@@ -123,11 +161,11 @@ contains
         end if
 
         ! Write CSV header
-        write (unit, '(a)') 'agent_id,cash'
+        write (unit, '(a)') 'agent_id,cash,saving_propensity'
 
         ! Write agent data
         do i = 1, size(this % pop)
-            write (unit, '(i0,",",f0.4)') i, this % pop(i) % cash
+            write (unit, '(i0,",",f0.4,",",f0.4)') i, this % pop(i) % cash, this % pop(i) % saving_propensity
         end do
 
         close (unit)
@@ -136,7 +174,7 @@ contains
 
     !------------------------------------------------------------
     function compute_metrics(this) result(metrics)
-        class(SimpleExchange), intent(in) :: this
+        class(CCMExchange), intent(in) :: this
         real(rk), allocatable :: metrics(:)
 
         allocate (metrics(1))
@@ -145,7 +183,7 @@ contains
 
     !------------------------------------------------------------
     function get_metric_names(this) result(result_names)
-        class(SimpleExchange), intent(in) :: this
+        class(CCMExchange), intent(in) :: this
         character(len=32), allocatable :: result_names(:)
         integer :: i
         allocate (result_names(size(this % names)))
@@ -156,7 +194,7 @@ contains
 
     !------------------------------------------------------------
     function gini_coefficient(this) result(gini)
-        class(SimpleExchange), intent(in) :: this
+        class(CCMExchange), intent(in) :: this
         real(rk) :: gini
         real(rk), allocatable :: cash_list(:)
         integer :: n, i
@@ -173,4 +211,4 @@ contains
 
     end function gini_coefficient
 
-end module model_simple_exchange_m
+end module model_ccm_exchange_m

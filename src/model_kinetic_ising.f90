@@ -56,21 +56,21 @@ contains
         type is (Config_KineticIsing)
             call init_rng(cfg % seed)
             allocate (this % pop(cfg % n_agents))
-            
+
             ! Initialize agents with random spins and initial cash
             do i = 1, cfg % n_agents
                 this % pop(i) % cash = cfg % init_cash
                 call random_number(u)
                 this % pop(i) % spin = (u < 0.5_rk)  ! Random initial spin
             end do
-            
+
             this % n_steps = cfg % n_steps
             this % write_every = cfg % write_every
             this % debt_limit = cfg % debt_limit
             this % exchange_delta = cfg % exchange_delta
             this % flip_prob = cfg % flip_prob
-        
-            allocate(this % names(3))
+
+            allocate (this % names(3))
             this % names(1) = 'gini_coefficient'
             this % names(2) = 'magnetization'
             this % names(3) = 'spin_correlation'
@@ -85,26 +85,26 @@ contains
         integer(int64) :: t, i
         character(len=20) :: filename
         character(len=30) :: metrics_filename
-        
+
         ! Initialize metrics file
         metrics_filename = "out/simulation_metrics.csv"
         call this % write_metrics_header(metrics_filename)
-        
+
         ! Write initial state
         call write_population_csv(this, "out/0.step.csv")
         call this % write_metrics_csv(metrics_filename, 0_int64)
 
         do t = 1, this % n_steps
             call this % step()
-            
+
             ! Write CSV and metrics only at specified intervals
             if (mod(t, this % write_every) == 0) then
-                write(filename, '("out/",i0,".step.csv")') t
+                write (filename, '("out/",i0,".step.csv")') t
                 call write_population_csv(this, filename)
                 call this % write_metrics_csv(metrics_filename, t)
             end if
         end do
-        
+
         write (*, '(a,i0)') 'Finished simulation.  Steps = ', this % n_steps
         write (*, '("Average cash = ",f10.4)') sum([(this % pop(i) % cash, i=1, size(this % pop))]) &
             / real(size(this % pop), rk)
@@ -117,24 +117,24 @@ contains
         integer :: n_pairs, p, i, j, n_agents
         integer, allocatable :: perm(:)
         real(rk), allocatable :: flip_randoms(:)
-        
+
         n_agents = size(this % pop)
         n_pairs = n_agents / 2
         allocate (perm(n_agents))
         allocate (flip_randoms(n_agents))
-        
+
         perm = [(i, i=1, n_agents)]
         call shuffle_int(perm)
-        
+
         ! Generate all random numbers for spin flips sequentially (random_number is not pure)
         do i = 1, n_agents
             call random_number(flip_randoms(i))
         end do
-        
+
         ! Trading phase
-        do concurrent (p = 1:n_pairs)
+        do concurrent(p=1:n_pairs)
             i = perm(2 * p - 1); j = perm(2 * p)
-            
+
             ! Check if agents have opposite spins and can afford the transaction
             if (this % pop(i) % spin .neqv. this % pop(j) % spin) then
                 ! Determine who is buying (spin = .true.) and who is selling (spin = .false.)
@@ -153,7 +153,7 @@ contains
                 end if
             end if
         end do
-        
+
         ! Spin flip phase
         do i = 1, n_agents
             if (flip_randoms(i) < this % flip_prob) then
@@ -167,31 +167,31 @@ contains
         class(KineticIsing), intent(in) :: this
         character(*), intent(in) :: filename
         integer :: unit, i, ios
-        
-        open(newunit=unit, file=filename, status='replace', action='write', iostat=ios)
+
+        open (newunit=unit, file=filename, status='replace', action='write', iostat=ios)
         if (ios /= 0) then
-            write(*,'(a,a)') 'Error opening file: ', filename
+            write (*, '(a,a)') 'Error opening file: ', filename
             return
         end if
-        
+
         ! Write CSV header
-        write(unit, '(a)') 'agent_id,cash,spin'
-        
+        write (unit, '(a)') 'agent_id,cash,spin'
+
         ! Write agent data
         do i = 1, size(this % pop)
-            write(unit, '(i0,",",f0.4,",",i0)') i, this % pop(i) % cash, merge(1, 0, this % pop(i) % spin)
+            write (unit, '(i0,",",f0.4,",",i0)') i, this % pop(i) % cash, merge(1, 0, this % pop(i) % spin)
         end do
-        
-        close(unit)
-        write(*,'(a,a)') 'Population data written to: ', filename
+
+        close (unit)
+        write (*, '(a,a)') 'Population data written to: ', filename
     end subroutine write_population_csv
 
     !------------------------------------------------------------
     function compute_metrics(this) result(metrics)
         class(KineticIsing), intent(in) :: this
         real(rk), allocatable :: metrics(:)
-        
-        allocate(metrics(3))
+
+        allocate (metrics(3))
         metrics(1) = this % gini_coefficient()
         metrics(2) = this % magnetization()
         metrics(3) = this % spin_correlation()
@@ -202,7 +202,7 @@ contains
         class(KineticIsing), intent(in) :: this
         character(len=32), allocatable :: result_names(:)
         integer :: i
-        allocate(result_names(size(this % names)))
+        allocate (result_names(size(this % names)))
         do i = 1, size(this % names)
             result_names(i) = this % names(i)
         end do
@@ -214,10 +214,10 @@ contains
         real(rk) :: gini
         real(rk), allocatable :: cash_list(:)
         integer :: n, i
-        
+
         n = size(this % pop)
-        allocate(cash_list(n))
-        
+        allocate (cash_list(n))
+
         ! Extract cash values
         do i = 1, n
             cash_list(i) = this % pop(i) % cash
@@ -231,12 +231,12 @@ contains
         class(KineticIsing), intent(in) :: this
         real(rk) :: mag
         integer :: i, n_up
-        
+
         n_up = 0
         do i = 1, size(this % pop)
             if (this % pop(i) % spin) n_up = n_up + 1
         end do
-        
+
         ! Magnetization: (N_up - N_down) / N_total = (2*N_up - N_total) / N_total
         mag = (2.0_rk * real(n_up, rk) - real(size(this % pop), rk)) / real(size(this % pop), rk)
     end function magnetization
@@ -247,12 +247,12 @@ contains
         real(rk) :: corr
         real(rk) :: sum_cash_up, sum_cash_down, mean_cash_up, mean_cash_down
         integer :: n_up, n_down, i
-        
+
         sum_cash_up = 0.0_rk
         sum_cash_down = 0.0_rk
         n_up = 0
         n_down = 0
-        
+
         do i = 1, size(this % pop)
             if (this % pop(i) % spin) then
                 sum_cash_up = sum_cash_up + this % pop(i) % cash
@@ -262,7 +262,7 @@ contains
                 n_down = n_down + 1
             end if
         end do
-        
+
         if (n_up > 0 .and. n_down > 0) then
             mean_cash_up = sum_cash_up / real(n_up, rk)
             mean_cash_down = sum_cash_down / real(n_down, rk)

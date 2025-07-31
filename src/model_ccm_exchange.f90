@@ -39,7 +39,7 @@ module model_ccm_exchange_m
 
         ! Private helper methods
         procedure, private :: gini_coefficient
-        ! procedure, private :: write_population_hdf5
+        procedure, private :: write_population_binary
     end type CCMExchange
 contains
     subroutine init(this, cfg)
@@ -56,7 +56,6 @@ contains
                 this % pop(i) % cash = cfg % init_cash
                 call random_number(rnd_prop_uni)
                 this % pop(i) % saving_propensity = (rnd_prop_uni * (cfg % max_saving_propensity - cfg % min_saving_propensity + 1)) + cfg % min_saving_propensity
-                ! this % pop(i) % saving_propensity = random_real(cfg % min_saving_propensity, cfg % max_saving_propensity)
             end do
             this % n_steps = cfg % n_steps
             this % write_every = cfg % write_every
@@ -66,7 +65,7 @@ contains
             allocate (this % names(1))
             this % names(1) = 'gini_coefficient'
         class default
-            error stop 'Unsupported config type in SimpleExchange init'
+            error stop 'Unsupported config type in CCMExchange init'
         end select
     end subroutine init
     !------------------------------------------------------------
@@ -74,6 +73,7 @@ contains
         class(CCMExchange), intent(inout) :: this
         integer(int64) :: t, i
         character(len=20) :: filename
+        character(len=30) :: binary_folder_name
         character(len=30) :: metrics_filename
 
         ! Initialize metrics file
@@ -92,6 +92,10 @@ contains
                 call this % write_metrics_csv(metrics_filename, t)
                 write (filename, '(a,i0,a)') 'out/', t, '.step.csv'
                 call write_population_csv(this, filename)
+
+                ! Write binary population data, new :)
+                write (binary_folder_name, '(a,i0,a)') 'out/', t, '.step'
+                call write_population_binary(this, binary_folder_name)
             end if
         end do
 
@@ -110,6 +114,8 @@ contains
         integer :: n_pairs, p, i, j
         integer, allocatable :: perm(:)
         real(rk) :: lambda_i, lambda_j, cash_i, cash_j
+        real(rk) :: exchange_result(2)
+        real(rk) :: exchange_matrix(2, 2)
         real(rk), allocatable :: eps(:)
 
         ! Generate the random set of pairs of agents
@@ -129,7 +135,7 @@ contains
 ! #ifdef __GFORTRAN__
 !         do p = 1, n_pairs
 ! #else
-        do concurrent(p=1:n_pairs) local(lambda_i, lambda_j, cash_i, cash_j)
+        do concurrent(p=1:n_pairs) local(lambda_i, lambda_j, cash_i, cash_j, exchange_matrix, exchange_result)
 ! #endif
             i = perm(2 * p - 1)
             j = perm(2 * p)
@@ -141,12 +147,19 @@ contains
             cash_j = this % pop(j) % cash
 
             ! Calculate the new cash values after exchange
-            ! TODO: Double-check the formula correctness based on the matrix above
-            this % pop(i) % cash = cash_i * (lambda_i + eps(p) * (1.0_rk - lambda_i)) + cash_j * (1.0_rk - eps(p)) * (1.0_rk - lambda_j)
-            this % pop(j) % cash = cash_j * (lambda_j + (1.0_rk - eps(p)) * (1.0_rk - lambda_j)) + cash_i * (1.0_rk - eps(p)) * (1.0_rk - lambda_i)
+            exchange_matrix(1, 1) = lambda_i + eps(p) * (1.0_rk - lambda_i)
+            exchange_matrix(1, 2) = eps(p) * (1.0_rk - lambda_j)
+            exchange_matrix(2, 1) = (1.0_rk - eps(p)) * (1.0_rk - lambda_i)
+            exchange_matrix(2, 2) = lambda_j + (1.0_rk - eps(p)) * (1.0_rk - lambda_j)
+            exchange_result = apply_exchange_matrix(cash_i, cash_j, exchange_matrix)
+            this % pop(i) % cash = exchange_result(1)
+            this % pop(j) % cash = exchange_result(2)
 
-            ! TODO: Do we want a debt limit check here?
             ! If the cash went below the limit, reset it using cash_i and cash_j
+            if ((this % pop(i) % cash < -this % debt_limit + this % exchange_delta) .or. (this % pop(j) % cash < -this % debt_limit + this % exchange_delta)) then
+                this % pop(i) % cash = cash_i
+                this % pop(j) % cash = cash_j
+            end if
 
         end do
     end subroutine step
@@ -176,14 +189,21 @@ contains
     end subroutine write_population_csv
 
     !------------------------------------------------------------
-    ! subroutine write_population_hdf5(this, filename)
-    !     class(CCMExchange), intent(in) :: this
-    !     character(*), intent(in) :: filename
+    ! - Custom HDF5-like binary format instead of CSV for population data
+    ! - Folder containing binary files
+    ! - Each binary file is directly an unformatted array that was formerly a CSV column
+    ! - Should be readable with numpy np.fromfile
+    subroutine write_population_binary(this, folder_name)
+        class(CCMExchange), intent(in) :: this
+        character(*), intent(in) :: folder_name
 
-    !     call h5write(filename, '/cash', this % pop % cash)
-    !     call h5write(filename, '/saving_propensity', this % pop % saving_propensity)
+        ! Write cash values to binary file
+        call write_list_binary(folder_name, 'cash', this % pop % cash)
 
-    ! end subroutine write_population_hdf5
+        ! Write saving propensity values to binary file
+        call write_list_binary(folder_name, 'saving_propensity', this % pop % saving_propensity)
+
+    end subroutine write_population_binary
 
     !------------------------------------------------------------
     function compute_metrics(this) result(metrics)

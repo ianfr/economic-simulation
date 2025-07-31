@@ -78,6 +78,32 @@ module config_m
 
 contains
 
+    ! Helper function to write an array to an unformatted binary file
+    subroutine write_list_binary(folder_name, filename, data)
+        character(*), intent(in) :: filename, folder_name
+        real(rk), intent(in) :: data(:)
+        integer :: unit, ios
+        character(len=100) :: io_emsg
+        logical :: folder_exists
+
+        ! Make the output folder if it doesn't exist
+        inquire (file=folder_name, exist=folder_exists)
+        if (.not. folder_exists) then
+            call system('mkdir -p '//trim(folder_name))
+        end if
+
+        open (newunit=unit, file=trim(folder_name)//'/'//filename//'.bin', access='stream', form='unformatted', status='replace', action='write', iostat=ios, iomsg=io_emsg)
+        if (ios /= 0) then
+            write (*, '(a,a)') 'Error opening binary file: ', trim(folder_name)//'/'//filename//'.bin'
+            print *, 'Error code: ', ios
+            print *, 'Error message: ', trim(io_emsg)
+            stop 1
+        end if
+
+        write (unit) data
+        close (unit)
+    end subroutine write_list_binary
+
     ! Use the type in sim_type.nml to decide which configuration to read
     function create_config() result(cfg)
         class(AbstractConfig), allocatable :: cfg

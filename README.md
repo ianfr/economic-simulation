@@ -109,6 +109,7 @@ Continue going through reference (3) and identify more prebuilt models to includ
     - Folder containing binary files
     - Each binary file is directly an unformatted array that was formerly a CSV column
     - Should be readable with numpy np.fromfile
+- Add support for the [lfortran](https://lfortran.org/) compiler once [namelist support](https://github.com/lfortran/lfortran/issues/1999) is added. It [supports `do concurrent`](https://lfortran.org/blog/2024/07/lfortran-supports-openmp-pragmas-and-do-concurrent/)!
 
 ## References
 
@@ -117,5 +118,5 @@ Continue going through reference (3) and identify more prebuilt models to includ
 3. Twenty-five years of random asset exchange modeling (2024). https://link.springer.com/article/10.1140/epjb/s10051-024-00695-3
 
 ## Other Notes
-- Apparently gfortran needs .nml files to end in a newline character... (link)[https://stackoverflow.com/a/46249863]
+- Apparently gfortran needs .nml files to end in a newline character... [link](https://stackoverflow.com/a/46249863)
 - gfortran 15.1 released in April 2025 finally supports locality spec for `do concurrent`

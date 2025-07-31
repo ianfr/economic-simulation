@@ -41,6 +41,8 @@ contains
         real(c_double), pointer :: ap, bp
         call c_f_pointer(a, ap)
         call c_f_pointer(b, bp)
+        ! print*, "ap: ", ap
+        ! print*, "bp: ", bp
         result = int(ap - bp, c_int)
     end function
     ! The actual qsort call to libc's qsort

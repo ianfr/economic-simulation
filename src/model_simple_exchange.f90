@@ -110,7 +110,7 @@ contains
             end if
         end do
     end subroutine step
-    
+
     !------------------------------------------------------------
     subroutine write_population_csv(this, filename)
         class(SimpleExchange), intent(in) :: this

@@ -115,4 +115,18 @@ contains
 
         print *, "...done writing metrics."
     end subroutine write_metrics_csv
+
+    !------------------------------------------------------------
+    ! Helper function that applies 2x2 exchange matrix to a pair of agents
+    ! Pure so that it can be used in do concurrent loops, and marked with "!$acc routine" for when the NVIDIA compiler is used
+    pure function apply_exchange_matrix(qi, qj, M) result(q_out)
+        !$acc routine
+        real(rk), intent(in) :: qi, qj ! Generic input quantities for each agent
+        real(rk), intent(in) :: M(2, 2) ! 2x2 exchange matrix
+        real(rk) :: q_out(2) ! Output quantities after exchange
+
+        q_out(1) = M(1, 1) * qi + M(1, 2) * qj
+        q_out(2) = M(2, 1) * qi + M(2, 2) * qj
+
+    end function apply_exchange_matrix
 end module sim_base_m

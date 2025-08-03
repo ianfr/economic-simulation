@@ -9,9 +9,12 @@ module sim_base_m
     use abstract_config_m
     implicit none
     type, abstract :: AbstractSimulator
+        integer(int64) :: n_steps = 0
+        integer(int64) :: write_every = 1000
     contains
         procedure(init_sim_iface), deferred :: init
-        procedure(run_sim_iface), deferred :: run
+        procedure :: run
+        procedure(step_sim_iface), deferred :: step
         procedure(write_pop_csv_iface), deferred :: write_population_csv
         procedure(compute_metrics_iface), deferred :: compute_metrics
         procedure(get_metric_names_iface), deferred :: get_metric_names
@@ -25,10 +28,10 @@ module sim_base_m
             class(AbstractSimulator), intent(out) :: this
             class(AbstractConfig), intent(in)          :: cfg
         end subroutine init_sim_iface
-        subroutine run_sim_iface(this)
+        subroutine step_sim_iface(this)
             import :: AbstractSimulator
             class(AbstractSimulator), intent(inout) :: this
-        end subroutine run_sim_iface
+        end subroutine step_sim_iface
         subroutine write_pop_csv_iface(this, filename)
             import :: AbstractSimulator
             class(AbstractSimulator), intent(in) :: this
@@ -115,6 +118,37 @@ contains
 
         print *, "...done writing metrics."
     end subroutine write_metrics_csv
+
+    !------------------------------------------------------------
+    ! Common run method implementation for all simulators
+    ! This method contains the main simulation loop that is identical across all models
+    subroutine run(this)
+        class(AbstractSimulator), intent(inout) :: this
+        integer(int64) :: t
+        character(len=20) :: filename
+        character(len=30) :: metrics_filename
+
+        ! Initialize metrics file
+        metrics_filename = "out/simulation_metrics.csv"
+        call this % write_metrics_header(metrics_filename)
+
+        ! Write initial state
+        call this % write_population_csv("out/0.step.csv")
+        call this % write_metrics_csv(metrics_filename, 0_int64)
+
+        do t = 1, this % n_steps
+            call this % step()
+
+            ! Write CSV and metrics only at specified intervals
+            if (mod(t, this % write_every) == 0) then
+                call this % write_metrics_csv(metrics_filename, t)
+                write (filename, '(a,i0,a)') 'out/', t, '.step.csv'
+                call this % write_population_csv(filename)
+            end if
+        end do
+
+        write (*, '(a,i0)') 'Finished simulation.  Steps = ', this % n_steps
+    end subroutine run
 
     !------------------------------------------------------------
     ! Helper function that applies 2x2 exchange matrix to a pair of agents

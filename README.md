@@ -101,7 +101,6 @@ Continue going through reference (3) and identify more prebuilt models to includ
 
 ### Code Updates
 
-- Move the run() method implementation into the `AbstractSimulation` class directly since that is the same for all models - step() is where the real magic happens
 - Benchmarks: gfortran cpu (serial) vs nvidia cpu (parallel) vs nvidia gpu
 - Update the sim_factory_m module with another routine to construct simulators without file I/O
 - Add some initial tests. Will likely need to expand the `AbtractSimulation` interface with some "test_" helper routines

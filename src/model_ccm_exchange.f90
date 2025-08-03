@@ -24,16 +24,13 @@ module model_ccm_exchange_m
     type, extends(AbstractSimulator) :: CCMExchange
         type(Agent), allocatable :: pop(:)
         character(len=32), allocatable :: names(:)  ! Metric names
-        integer(int64)           :: n_steps = 0
-        integer(int64)           :: write_every = 1000
         real(rk)                 :: debt_limit = 0.0_rk  ! Maximum debt allowed
         real(rk)                 :: exchange_delta = 1.0_rk  ! Amount to exchange between agents
     contains
         ! Override the abstract methods
         procedure :: init
-        procedure :: run
-        procedure :: write_population_csv
         procedure :: step
+        procedure :: write_population_csv
         procedure :: compute_metrics
         procedure :: get_metric_names
 
@@ -68,41 +65,6 @@ contains
             error stop 'Unsupported config type in CCMExchange init'
         end select
     end subroutine init
-    !------------------------------------------------------------
-    subroutine run(this)
-        class(CCMExchange), intent(inout) :: this
-        integer(int64) :: t, i
-        character(len=20) :: filename
-        character(len=30) :: binary_folder_name
-        character(len=30) :: metrics_filename
-
-        ! Initialize metrics file
-        metrics_filename = "out/simulation_metrics.csv"
-        call this % write_metrics_header(metrics_filename)
-
-        ! Write initial state
-        call write_population_csv(this, "out/0.step.csv")
-        call this % write_metrics_csv(metrics_filename, 0_int64)
-
-        do t = 1, this % n_steps
-            call this % step()
-
-            ! Write CSV and metrics only at specified intervals
-            if (mod(t, this % write_every) == 0) then
-                call this % write_metrics_csv(metrics_filename, t)
-                write (filename, '(a,i0,a)') 'out/', t, '.step.csv'
-                call write_population_csv(this, filename)
-
-                ! Write binary population data, new :)
-                write (binary_folder_name, '(a,i0,a)') 'out/', t, '.step'
-                call write_population_binary(this, binary_folder_name)
-            end if
-        end do
-
-        write (*, '(a,i0)') 'Finished simulation.  Steps =', this % n_steps
-        write (*, '("Average cash = ",f10.4)') sum([(this % pop(i) % cash, i=1, size(this % pop))]) &
-            / real(size(this % pop), rk)
-    end subroutine run
 
     !------------------------------------------------------------
     ! Transition matrix:

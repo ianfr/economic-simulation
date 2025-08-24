@@ -2,9 +2,14 @@
 
 Agent-based economic simulation framework leveraging CUDA Fortran and multicore processing for GPU and CPU parallelism. Models based on analogies with statistical physics such as kinetic exchange, spin flips, magnetization, and more.
 
-Boltzmann PDF fit for simple exchange with debt (see reference 2):
+## Gallery
 
-![image](images/50000.step_cash_boltzmann.png "Boltzmann PDF fit for simple exchange with debt")
+| Description | Image | Reference Image |
+|----------|----------|---------|
+| Boltzmann PDF fit for simple exchange with debt (see Ref. 2): | ![image](images/50000.step_cash_boltzmann.png "Boltzmann PDF fit for simple exchange with debt") | ![image](images/ref.boltzmann.png "") |
+| Conservative Exchange Market (CEM) (see Ref. 4): `wealth` Distribution | ![image](images/50000.step_wealth_CEM.png "") | ![image](images/ref.CEM.png "") |
+|CEM Population `wealth` Stats History (see Ref. 4) | ![image](images/wealth_combined_CEM.png "") |  _No maching reference material_ |
+
 
 ## Why is this Framework Useful for Researchers?
 
@@ -21,10 +26,12 @@ Boltzmann PDF fit for simple exchange with debt (see reference 2):
 - Python post-processing tools with optional CPU parallelism
     - Histograms for population properties with optional probability distribution fitting
     - Line plots of summary stats for population properties over time
+    - Line plots tracking custom population metrics (Gini coefficient, etc.) over time
 - Available simulation models (see [MODELS.md](MODELS.md) for more details):
     - `SimpleExchange` - Simple random exchange with configurable debt limit
     - `KineticIsing` - Extension of `SimpleExchange` where agents have buy/sell 'spins'
     - `CCMExchange` - Extension of `SimpleExchange` where agents have individual propsensities to save
+    - `ConservativeExchangeMarket` - Proximity-based wealth redistribution model - reference (4)
 - Builds with `gfortran` 15.1.0+ and `nvfortran`
 
 ## Commands
@@ -93,9 +100,11 @@ See:
 ### Models
 
 Classic models:
-- CCM model - section II.A of reference (3)
 - CPT model - section II.A of reference (3)
 - BM model (possibly discrete version) - section II.B of reference (3)
+
+Usage:
+- Create a development Dockerfile & accompanying devcontainer.json
 
 Continue going through reference (3) and identify more prebuilt models to include in the library
 
@@ -115,6 +124,7 @@ Continue going through reference (3) and identify more prebuilt models to includ
 1. Colloquium: Statistical mechanics of money, wealth, and income (2009). https://journals.aps.org/rmp/abstract/10.1103/RevModPhys.81.1703
 2. Statistical mechanics of money (2000). https://doi.org/10.1007/s100510070114
 3. Twenty-five years of random asset exchange modeling (2024). https://link.springer.com/article/10.1140/epjb/s10051-024-00695-3
+4. Wealth redistribution in our small world (2003). https://doi.org/10.1016/S0378-4371(03)00430-8. https://www.if.ufrgs.br/~iglesias/Wealth%20small%20world.pdf
 
 ## Other Notes
 - Apparently gfortran needs .nml files to end in a newline character... [link](https://stackoverflow.com/a/46249863)

@@ -61,7 +61,7 @@ module config_m
         procedure :: read_nml => read_nml_kinetic_ising
     end type Config_KineticIsing
 
-    ! Configuration type for simple exchange simulations
+    ! Configuration type for CCM (Chakraborti and Chakrabarti) simulations
     type, extends(AbstractConfig) :: Config_CCMExchange
         integer(int64) :: n_agents = 1000
         integer(int64) :: n_steps = 10000
@@ -75,6 +75,18 @@ module config_m
     contains
         procedure :: read_nml => read_nml_ccm_exchange
     end type Config_CCMExchange
+
+    ! Configuration type for CEM (Conservative Exchange Market) simulations
+    type, extends(AbstractConfig) :: Config_ConservativeExchangeMarket
+        integer(int64) :: n_agents = 1000
+        integer(int64) :: n_steps = 10000
+        integer(int64) :: seed = 20250715
+        integer(int64) :: write_every = 1000
+        integer :: k = 1 ! Number of nearest neighbors on each side
+        real(rk) :: rewiring_probability = 0.1_rk ! Probability of rewiring connections
+    contains
+        procedure :: read_nml => read_nml_conservative_exchange_market
+    end type Config_ConservativeExchangeMarket
 
 contains
 
@@ -122,6 +134,8 @@ contains
             allocate (cfg, source=Config_KineticIsing())
         case ('CCMExchange')
             allocate (cfg, source=Config_CCMExchange())
+        case ('ConservativeExchangeMarket')
+            allocate (cfg, source=Config_ConservativeExchangeMarket())
         case default
             error stop 'Unknown simulation type: '//trim(sim_type)
         end select
@@ -240,5 +254,41 @@ contains
             this % write_every = write_every
         end if
     end subroutine read_nml_ccm_exchange
+
+    ! Read the configuration from 'in.nml' for Conservative Exchange Market simulation
+    subroutine read_nml_conservative_exchange_market(this)
+        class(Config_ConservativeExchangeMarket), intent(inout) :: this
+
+        logical :: nml_exists
+        integer(int64) :: n_agents, n_steps, seed, write_every
+        integer :: k
+        real(rk) :: rewiring_probability
+
+        namelist /run/ n_agents, n_steps, seed, write_every, k, rewiring_probability
+
+        inquire (file='in.nml', exist=nml_exists)
+
+        if (nml_exists) then
+            ! Initialize with current values
+            n_agents = this % n_agents
+            n_steps = this % n_steps
+            seed = this % seed
+            write_every = this % write_every
+            k = this % k
+            rewiring_probability = this % rewiring_probability
+
+            open (unit=10, file='in.nml', status='old', action='read')
+            read (10, nml=run)
+            close (10)
+
+            ! Update object with read values
+            this % n_agents = n_agents
+            this % n_steps = n_steps
+            this % seed = seed
+            this % write_every = write_every
+            this % k = k
+            this % rewiring_probability = rewiring_probability
+        end if
+    end subroutine read_nml_conservative_exchange_market
 
 end module config_m

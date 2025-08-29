@@ -1,0 +1,8 @@
+&run
+n_agents = 10000
+n_steps  = 50000
+seed = 0
+write_every = 100
+k = 2
+rewiring_probability = 0.1
+/

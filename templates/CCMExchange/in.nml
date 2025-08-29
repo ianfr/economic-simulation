@@ -1,0 +1,9 @@
+&run
+n_agents = 10000
+n_steps  = 1000
+init_cash = 50.0
+debt_limit = 0.0
+exchange_delta = 1.0
+seed = 0
+write_every = 100
+/

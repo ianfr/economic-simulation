@@ -88,6 +88,20 @@ module config_m
         procedure :: read_nml => read_nml_conservative_exchange_market
     end type Config_ConservativeExchangeMarket
 
+    ! Configuration type for Stochastic Preferences simulations
+    type, extends(AbstractConfig) :: Config_StochasticPreferences
+        integer(int64) :: n_agents = 1000
+        integer(int64) :: n_steps = 10000
+        real(rk)       :: alpha = 0.5_rk           ! Conservation parameter for good A (αN total)
+        real(rk)       :: beta = 0.5_rk            ! Conservation parameter for good B (βN total)
+        real(rk)       :: init_good_a = 50.0_rk    ! Initial holdings of good A per agent
+        real(rk)       :: init_good_b = 50.0_rk    ! Initial holdings of good B per agent
+        integer(int64) :: seed = 20250715
+        integer(int64) :: write_every = 1000
+    contains
+        procedure :: read_nml => read_nml_stochastic_preferences
+    end type Config_StochasticPreferences
+
 contains
 
     ! Helper function to write an array to an unformatted binary file
@@ -136,6 +150,8 @@ contains
             allocate (cfg, source=Config_CCMExchange())
         case ('ConservativeExchangeMarket')
             allocate (cfg, source=Config_ConservativeExchangeMarket())
+        case ('StochasticPreferences')
+            allocate (cfg, source=Config_StochasticPreferences())
         case default
             error stop 'Unknown simulation type: '//trim(sim_type)
         end select
@@ -290,5 +306,44 @@ contains
             this % rewiring_probability = rewiring_probability
         end if
     end subroutine read_nml_conservative_exchange_market
+
+    ! Read the configuration from 'in.nml' for Stochastic Preferences simulation
+    subroutine read_nml_stochastic_preferences(this)
+        class(Config_StochasticPreferences), intent(inout) :: this
+
+        logical :: nml_exists
+        integer(int64) :: n_agents, n_steps, seed, write_every
+        real(rk) :: alpha, beta, init_good_a, init_good_b
+
+        namelist /run/ n_agents, n_steps, seed, write_every, alpha, beta, init_good_a, init_good_b
+
+        inquire (file='in.nml', exist=nml_exists)
+
+        if (nml_exists) then
+            ! Initialize with current values
+            n_agents = this % n_agents
+            n_steps = this % n_steps
+            seed = this % seed
+            write_every = this % write_every
+            alpha = this % alpha
+            beta = this % beta
+            init_good_a = this % init_good_a
+            init_good_b = this % init_good_b
+
+            open (unit=10, file='in.nml', status='old', action='read')
+            read (10, nml=run)
+            close (10)
+
+            ! Update object with read values
+            this % n_agents = n_agents
+            this % n_steps = n_steps
+            this % seed = seed
+            this % write_every = write_every
+            this % alpha = alpha
+            this % beta = beta
+            this % init_good_a = init_good_a
+            this % init_good_b = init_good_b
+        end if
+    end subroutine read_nml_stochastic_preferences
 
 end module config_m

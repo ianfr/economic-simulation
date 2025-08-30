@@ -95,3 +95,37 @@ Configuration parameters:
 
 Note: Initial wealth is randomly distributed between 0 and 1 for each agent.
 
+## StochasticPreferences
+
+Based on Silver, Slud, and Takamoto (2002) - reference (5) in [README.md](README.md). This model implements an exchange market where agents have stochastic preferences for two goods and make optimal allocation decisions based on Cobb-Douglas utility functions.
+
+Key features:
+- Agents hold two goods (A and B) with quantities `a_it` and `b_it`
+- Each agent has a stochastic preference `f_it` randomly drawn from [0,1] each time period
+- Wealth is calculated as `w_it = a_it + θ_t * b_it` where `θ_t` is the market price
+- Market-clearing price is determined by `θ_t = Σ(1-f_it)*a_(i,t-1) / Σf_it*b_(i,t-1)`
+- Agents allocate wealth optimally based on Cobb-Douglas utility maximization
+- Total quantities of goods A and B are conserved (`αN` and `βN` respectively)
+
+Exchange mechanism:
+1. Update stochastic preferences for all agents (new random values each period)
+2. Compute market-clearing price based on aggregate preferences and holdings
+3. Update agent allocations using optimal allocation equations
+4. Update wealth based on new holdings and current price
+
+Configuration parameters:
+- `n_agents`: Number of agents in the simulation (default 1000)
+- `n_steps`: Number of simulation steps (default 10000)
+- `alpha`: Conservation parameter for good A (αN total, default 0.5)
+- `beta`: Conservation parameter for good B (βN total, default 0.5)
+- `init_good_a`: Initial holdings of good A per agent (default 50.0)
+- `init_good_b`: Initial holdings of good B per agent (default 50.0)
+- `seed`: Random seed for reproducibility (default 20250715)
+- `write_every`: Frequency of CSV output (every N steps, default 1000)
+
+Metrics tracked:
+- `gini_good_a`: Gini coefficient for good A distribution
+- `gini_good_b`: Gini coefficient for good B distribution
+- `gini_wealth`: Gini coefficient for wealth distribution
+- `price`: Current market price θ_t
+

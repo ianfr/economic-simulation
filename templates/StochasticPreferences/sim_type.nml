@@ -1,0 +1,3 @@
+&sim_config
+sim_type = 'StochasticPreferences'
+/

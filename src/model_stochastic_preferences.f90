@@ -2,6 +2,7 @@
 ! model_stochastic_preferences.f90
 ! Stochastic Preferences Exchange Market implementation
 ! Based on Silver, Slud, and Takamoto (2002) - reference (5)
+! See MODELS.md for more details
 !===============================================================
 module model_stochastic_preferences_m
     use kinds_m
@@ -26,10 +27,12 @@ module model_stochastic_preferences_m
     type, extends(AbstractSimulator) :: StochasticPreferences
         type(Agent), allocatable :: pop(:)
         character(len=32), allocatable :: names(:)  ! Metric names
-        real(rk)                 :: alpha = 0.5_rk            ! Conservation parameter for good A (αN total)
-        real(rk)                 :: beta = 0.5_rk             ! Conservation parameter for good B (βN total)
-        real(rk)                 :: init_good_a = 50.0_rk     ! Initial holdings of good A per agent
-        real(rk)                 :: init_good_b = 50.0_rk     ! Initial holdings of good B per agent
+
+        integer(int64) :: N_agents = 0         ! Number of agents
+        real(rk)                  :: alpha = 1            ! Conservation parameter for good A (αN total)
+        real(rk)                  :: beta = 1             ! Conservation parameter for good B (βN total)
+        ! real(rk)                 :: init_good_a = 50.0_rk     ! Initial holdings of good A per agent
+        ! real(rk)                 :: init_good_b = 50.0_rk     ! Initial holdings of good B per agent
         real(rk)                 :: price = 1.0_rk            ! Current market price θ_t
     contains
         ! Override the abstract methods
@@ -45,6 +48,7 @@ module model_stochastic_preferences_m
         procedure, private :: gini_coefficient_wealth
         procedure, private :: compute_market_price
         procedure, private :: update_agent_allocations
+        procedure, private :: validate_market_clearing
         procedure, private :: write_population_binary
     end type StochasticPreferences
 
@@ -54,6 +58,8 @@ contains
         class(AbstractConfig), intent(in)  :: cfg
         integer(int64) :: i
         real(rk) :: u
+        real(rk) :: init_good_a
+        real(rk) :: init_good_b
 
         select type (cfg)
         type is (Config_StochasticPreferences)
@@ -61,9 +67,12 @@ contains
             this % write_every = cfg % write_every
             this % alpha = cfg % alpha
             this % beta = cfg % beta
-            this % init_good_a = cfg % init_good_a
-            this % init_good_b = cfg % init_good_b
-            
+            this % N_agents = cfg % n_agents
+            ! this % init_good_a = cfg % init_good_a
+            ! this % init_good_b = cfg % init_good_b
+            init_good_a = this%alpha
+            init_good_b = this%beta
+
             ! Initialize random number generator
             call init_rng(cfg % seed)
             
@@ -79,9 +88,13 @@ contains
             
             ! Initialize agents with equal holdings and random preferences
             do i = 1, cfg % n_agents
-                this % pop(i) % good_a = this % init_good_a
-                this % pop(i) % good_b = this % init_good_b
-                
+                ! Distribute goods to ensure conservation constraints
+                ! Each agent gets their proportional share of the total
+                ! this % pop(i) % good_a = this % alpha * real(cfg % n_agents, rk) / real(cfg % n_agents, rk)
+                ! this % pop(i) % good_b = this % beta * real(cfg % n_agents, rk) / real(cfg % n_agents, rk)
+                this % pop(i) % good_a = init_good_a
+                this % pop(i) % good_b = init_good_b
+
                 ! Assign random preference f_it ∈ [0,1]
                 call random_number(u)
                 this % pop(i) % preference = u
@@ -89,6 +102,9 @@ contains
                 ! Initial wealth calculation (price starts at 1.0)
                 this % pop(i) % wealth = this % pop(i) % good_a + this % price * this % pop(i) % good_b
             end do
+
+            ! Validate initial market clearing constraints
+            call this % validate_market_clearing()
             
             write (*, '(a,i0)') 'Initialized StochasticPreferences simulation with agents: ', cfg % n_agents
         class default
@@ -117,7 +133,60 @@ contains
 
         ! Step 3: Update agent allocations and wealth
         call this % update_agent_allocations()
+
+        ! Step 4: Validate market clearing constraints
+        ! TODO update this to allow for fluctuations in prices
+        ! call this % validate_market_clearing()
     end subroutine step
+
+    !------------------------------------------------------------
+    ! Validate that market clearing constraints are satisfied
+    ! Sum of all good_a must equal alpha*N and sum of all good_b must equal beta*N
+    subroutine validate_market_clearing(this)
+        class(StochasticPreferences), intent(in) :: this
+        real(rk) :: total_good_a, total_good_b, expected_total_a, expected_total_b
+        real(rk) :: tolerance, error_a, error_b
+        integer(int64) :: i
+
+        ! Calculate actual totals
+        total_good_a = 0.0_rk
+        total_good_b = 0.0_rk
+        do i = 1, size(this % pop)
+            total_good_a = total_good_a + this % pop(i) % good_a
+            total_good_b = total_good_b + this % pop(i) % good_b
+        end do
+
+        ! Calculate expected totals
+        expected_total_a = this % alpha * real(size(this % pop), rk)
+        expected_total_b = this % beta * real(size(this % pop), rk)
+
+        ! Set tolerance (relative error)
+        ! tolerance = 1.0e-6_rk
+        tolerance = 0.001
+
+        ! Calculate relative errors
+        error_a = abs(total_good_a - expected_total_a) / max(expected_total_a, 1.0e-12_rk)
+        error_b = abs(total_good_b - expected_total_b) / max(expected_total_b, 1.0e-12_rk)
+
+        ! Check constraints and stop with error if violated
+        if (error_a > tolerance) then
+            write(*, '(a)') 'ERROR: Market clearing constraint violated for good A!'
+            write(*, '(a,f0.10)') 'Expected total good A: ', expected_total_a
+            write(*, '(a,f0.10)') 'Actual total good A:   ', total_good_a
+            write(*, '(a,f0.10)') 'Relative error:        ', error_a
+            write(*, '(a,f0.10)') 'Tolerance:             ', tolerance
+            error stop 'Market clearing constraint violated for good A'
+        end if
+
+        if (error_b > tolerance) then
+            write(*, '(a)') 'ERROR: Market clearing constraint violated for good B!'
+            write(*, '(a,f0.10)') 'Expected total good B: ', expected_total_b
+            write(*, '(a,f0.10)') 'Actual total good B:   ', total_good_b
+            write(*, '(a,f0.10)') 'Relative error:        ', error_b
+            write(*, '(a,f0.10)') 'Tolerance:             ', tolerance
+            error stop 'Market clearing constraint violated for good B'
+        end if
+    end subroutine validate_market_clearing
 
     !------------------------------------------------------------
     ! Compute market-clearing price θ_t using equation (6) from Silver et al. 2002
@@ -136,65 +205,51 @@ contains
         end do
 
         ! Avoid division by zero with a larger safety margin
-        if (denominator > 1.0e-8_rk) then
-            this % price = numerator / denominator
-        else
-            this % price = 1.0_rk  ! Default fallback price
-        end if
+        ! if (denominator > 1.0e-8_rk) then
+        !     this % price = numerator / denominator
+        ! else
+        !     this % price = 1.0_rk  ! Default fallback price
+        ! end if
 
         ! Ensure price stays within reasonable bounds
         if (this % price <= 0.0_rk .or. this % price > 1.0e6_rk) then
-            this % price = 1.0_rk
+            ! this % price = 1.0_rk
+            stop 'ERROR: Computed market price out of bounds'
         end if
     end subroutine compute_market_price
 
     !------------------------------------------------------------
-    ! Update agent allocations using equations (7) from Silver et al. 2002
+    ! Update agent allocations using equations (8) from Silver et al. 2002
+    ! Matrix form: (a_it, b_it) = (f_it/(1-f_it)/θ_t, 1/θ_t) * (a_(i,t-1), b_(i,t-1))
     subroutine update_agent_allocations(this)
         class(StochasticPreferences), intent(inout) :: this
         integer(int64) :: i
-        real(rk) :: sum_f_a, sum_f_b, sum_one_minus_f_a, sum_one_minus_f_b
-        real(rk) :: old_a, old_b, new_a, new_b
+        real(rk) :: old_a, old_b, f_it, theta_t
+        ! real(rk) :: m11, m12, m21, m22  ! Matrix elements
 
-        ! Calculate denominators for the allocation formulas
-        sum_f_a = 0.0_rk
-        sum_f_b = 0.0_rk
-        sum_one_minus_f_a = 0.0_rk
-        sum_one_minus_f_b = 0.0_rk
+        theta_t = this % price
 
-        do i = 1, size(this % pop)
-            sum_f_a = sum_f_a + this % pop(i) % preference * this % pop(i) % good_a
-            sum_f_b = sum_f_b + this % pop(i) % preference * this % pop(i) % good_b
-            sum_one_minus_f_a = sum_one_minus_f_a + (1.0_rk - this % pop(i) % preference) * this % pop(i) % good_a
-            sum_one_minus_f_b = sum_one_minus_f_b + (1.0_rk - this % pop(i) % preference) * this % pop(i) % good_b
-        end do
-
-        ! Update each agent's holdings using equation (7) with safety checks
+        ! Update each agent's holdings
         do i = 1, size(this % pop)
             old_a = this % pop(i) % good_a
             old_b = this % pop(i) % good_b
+            f_it = this % pop(i) % preference
 
-            ! Avoid division by zero with larger safety margins
-            if (sum_f_b > 1.0e-8_rk .and. sum_one_minus_f_a > 1.0e-8_rk) then
-                ! a_it = f_it * a_(i,t-1) + f_it * b_(i,t-1) * Σ(1-f_jt)*a_(j,t-1) / Σf_jt*b_(j,t-1)
-                new_a = this % pop(i) % preference * old_a + &
-                        this % pop(i) % preference * old_b * sum_one_minus_f_a / sum_f_b
+            ! ! Matrix elements from equation (8):
+            ! ! M = (f_it           (1-f_it)/θ_t )
+            ! !     ((1-f_it)*θ_t      f_it     )
+            ! m11 = f_it
+            ! m12 = (1.0_rk - f_it) / theta_t
+            ! m21 = (1.0_rk - f_it) * theta_t
+            ! m22 = f_it
 
-                ! b_it = (1-f_it) * b_(i,t-1) + a_(i,t-1) * Σf_jt*b_(j,t-1) / Σ(1-f_jt)*a_(j,t-1)
-                new_b = (1.0_rk - this % pop(i) % preference) * old_b + &
-                        old_a * sum_f_b / sum_one_minus_f_a
+            ! ! Apply matrix transformation: (a_it, b_it) = M * (a_(i,t-1), b_(i,t-1))
+            ! this % pop(i) % good_a = m11 * old_a + m12 * old_b
+            ! this % pop(i) % good_b = m21 * old_a + m22 * old_b
 
-                ! Safety checks for valid values
-                if (new_a >= 0.0_rk .and. new_a < 1.0e6_rk .and. &
-                    new_b >= 0.0_rk .and. new_b < 1.0e6_rk) then
-                    this % pop(i) % good_a = new_a
-                    this % pop(i) % good_b = new_b
-                else
-                    ! Keep old values if new ones are problematic
-                    this % pop(i) % good_a = old_a
-                    this % pop(i) % good_b = old_b
-                end if
-            end if
+            ! Use equation (7), substituting in price appropriately
+            this % pop(i) % good_a = (f_it * old_a) + (f_it * old_b * theta_t)
+            this % pop(i) % good_b = (1.0 - f_it) * (old_b + old_a * (1.0 / theta_t))
 
             ! Update wealth using equation (1): w_it = a_it + θ_t * b_it
             this % pop(i) % wealth = this % pop(i) % good_a + this % price * this % pop(i) % good_b

@@ -41,7 +41,7 @@ module config_m
         real(rk)       :: init_cash = 100.0_rk
         real(rk)       :: debt_limit = 0.0_rk  ! Maximum debt allowed (0.0 = debt-free)
         real(rk)       :: exchange_delta = 1.0_rk  ! Amount to exchange between agents
-        integer(int64) :: seed = 20250715
+        integer(int64) :: seed = 0
         integer(int64) :: write_every = 1000
     contains
         procedure :: read_nml
@@ -55,7 +55,7 @@ module config_m
         real(rk)       :: debt_limit = 0.0_rk  ! Maximum debt allowed (0.0 = debt-free)
         real(rk)       :: exchange_delta = 1.0_rk  ! Amount to exchange between agents
         real(rk)       :: flip_prob = 0.01_rk  ! Probability of random spin flip
-        integer(int64) :: seed = 20250715
+        integer(int64) :: seed = 0
         integer(int64) :: write_every = 1000
     contains
         procedure :: read_nml => read_nml_kinetic_ising
@@ -70,7 +70,7 @@ module config_m
         real(rk)       :: exchange_delta = 1.0_rk  ! Amount to exchange between agents
         real(rk)       :: min_saving_propensity = 0.1_rk  ! Minimum individual saving propensity
         real(rk)       :: max_saving_propensity = 0.9_rk  ! Maximum individual saving propensity
-        integer(int64) :: seed = 20250715
+        integer(int64) :: seed = 0
         integer(int64) :: write_every = 1000
     contains
         procedure :: read_nml => read_nml_ccm_exchange
@@ -80,7 +80,7 @@ module config_m
     type, extends(AbstractConfig) :: Config_ConservativeExchangeMarket
         integer(int64) :: n_agents = 1000
         integer(int64) :: n_steps = 10000
-        integer(int64) :: seed = 20250715
+        integer(int64) :: seed = 0
         integer(int64) :: write_every = 1000
         integer :: k = 1 ! Number of nearest neighbors on each side
         real(rk) :: rewiring_probability = 0.1_rk ! Probability of rewiring connections
@@ -94,9 +94,7 @@ module config_m
         integer(int64) :: n_steps = 10000
         real(rk)       :: alpha = 0.5_rk           ! Conservation parameter for good A (αN total)
         real(rk)       :: beta = 0.5_rk            ! Conservation parameter for good B (βN total)
-        real(rk)       :: init_good_a = 50.0_rk    ! Initial holdings of good A per agent
-        real(rk)       :: init_good_b = 50.0_rk    ! Initial holdings of good B per agent
-        integer(int64) :: seed = 20250715
+        integer(int64) :: seed = 0
         integer(int64) :: write_every = 1000
     contains
         procedure :: read_nml => read_nml_stochastic_preferences
@@ -313,9 +311,9 @@ contains
 
         logical :: nml_exists
         integer(int64) :: n_agents, n_steps, seed, write_every
-        real(rk) :: alpha, beta, init_good_a, init_good_b
+        real(rk) :: alpha, beta
 
-        namelist /run/ n_agents, n_steps, seed, write_every, alpha, beta, init_good_a, init_good_b
+        namelist /run/ n_agents, n_steps, seed, write_every, alpha, beta
 
         inquire (file='in.nml', exist=nml_exists)
 
@@ -327,8 +325,6 @@ contains
             write_every = this % write_every
             alpha = this % alpha
             beta = this % beta
-            init_good_a = this % init_good_a
-            init_good_b = this % init_good_b
 
             open (unit=10, file='in.nml', status='old', action='read')
             read (10, nml=run)
@@ -341,8 +337,6 @@ contains
             this % write_every = write_every
             this % alpha = alpha
             this % beta = beta
-            this % init_good_a = init_good_a
-            this % init_good_b = init_good_b
         end if
     end subroutine read_nml_stochastic_preferences
 

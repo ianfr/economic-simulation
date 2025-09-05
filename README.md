@@ -104,17 +104,17 @@ Classic models:
 - CPT model - section II.A of reference (3)
 - BM model (possibly discrete version) - section II.B of reference (3)
 
-Usage:
-- Create a development Dockerfile & accompanying devcontainer.json
-
 Continue going through reference (3) and identify more prebuilt models to include in the library
 
 ### Code Updates
 
+- Refactor PMA to flow from JSON inputs and allow for fitting up to 2 distributions to resulting densities
+- Create config files for deployment on AWS EC2 with Terraform & Docker Hub
+- Create a development Dockerfile & accompanying devcontainer.json
 - Benchmarks: gfortran cpu (serial) vs nvidia cpu (parallel) vs nvidia gpu
 - Update the sim_factory_m module with another routine to construct simulators without file I/O
 - Add some initial tests. Will likely need to expand the `AbtractSimulation` interface with some "test_" helper routines
-- Custom HDF5-like binary format instead of CSV for population data 
+- Custom HDF5-like binary format instead of CSV for population data (already experimented with and looks promising)
     - Folder containing binary files
     - Each binary file is directly an unformatted array that was formerly a CSV column
     - Should be readable with numpy np.fromfile

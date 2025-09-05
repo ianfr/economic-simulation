@@ -3,8 +3,6 @@ n_agents = 10000
 n_steps  = 1000
 alpha = 0.5
 beta = 0.5
-init_good_a = 50.0
-init_good_b = 50.0
-seed = 987654
+seed = 0
 write_every = 100
 /

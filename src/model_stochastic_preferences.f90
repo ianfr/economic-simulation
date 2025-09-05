@@ -12,7 +12,7 @@ module model_stochastic_preferences_m
     use sim_base_m
     use abm_metrics_m
     implicit none
-    public ! public by default, Agent below is private
+    public 
 
     ! Define the agent privately
     private :: Agent
@@ -28,12 +28,10 @@ module model_stochastic_preferences_m
         type(Agent), allocatable :: pop(:)
         character(len=32), allocatable :: names(:)  ! Metric names
 
-        integer(int64) :: N_agents = 0         ! Number of agents
-        real(rk)                  :: alpha = 1            ! Conservation parameter for good A (αN total)
-        real(rk)                  :: beta = 1             ! Conservation parameter for good B (βN total)
-        ! real(rk)                 :: init_good_a = 50.0_rk     ! Initial holdings of good A per agent
-        ! real(rk)                 :: init_good_b = 50.0_rk     ! Initial holdings of good B per agent
-        real(rk)                 :: price = 1.0_rk            ! Current market price θ_t
+        integer(int64)  :: N_agents = 0         ! Number of agents
+        real(rk)        :: alpha = 1            ! Conservation parameter for good A (αN total)
+        real(rk)        :: beta = 1             ! Conservation parameter for good B (βN total)
+        real(rk)        :: price = 1.0_rk       ! Current market price θ_t
     contains
         ! Override the abstract methods
         procedure :: init
@@ -49,7 +47,6 @@ module model_stochastic_preferences_m
         procedure, private :: compute_market_price
         procedure, private :: update_agent_allocations
         procedure, private :: validate_market_clearing
-        procedure, private :: write_population_binary
     end type StochasticPreferences
 
 contains
@@ -58,8 +55,6 @@ contains
         class(AbstractConfig), intent(in)  :: cfg
         integer(int64) :: i
         real(rk) :: u
-        real(rk) :: init_good_a
-        real(rk) :: init_good_b
 
         select type (cfg)
         type is (Config_StochasticPreferences)
@@ -68,10 +63,6 @@ contains
             this % alpha = cfg % alpha
             this % beta = cfg % beta
             this % N_agents = cfg % n_agents
-            ! this % init_good_a = cfg % init_good_a
-            ! this % init_good_b = cfg % init_good_b
-            init_good_a = this%alpha
-            init_good_b = this%beta
 
             ! Initialize random number generator
             call init_rng(cfg % seed)
@@ -88,12 +79,8 @@ contains
             
             ! Initialize agents with equal holdings and random preferences
             do i = 1, cfg % n_agents
-                ! Distribute goods to ensure conservation constraints
-                ! Each agent gets their proportional share of the total
-                ! this % pop(i) % good_a = this % alpha * real(cfg % n_agents, rk) / real(cfg % n_agents, rk)
-                ! this % pop(i) % good_b = this % beta * real(cfg % n_agents, rk) / real(cfg % n_agents, rk)
-                this % pop(i) % good_a = init_good_a
-                this % pop(i) % good_b = init_good_b
+                this % pop(i) % good_a = this % alpha
+                this % pop(i) % good_b = this % beta
 
                 ! Assign random preference f_it ∈ [0,1]
                 call random_number(u)
@@ -104,7 +91,7 @@ contains
             end do
 
             ! Validate initial market clearing constraints
-            call this % validate_market_clearing()
+            call this % validate_market_clearing(1.0e-6_rk)
             
             write (*, '(a,i0)') 'Initialized StochasticPreferences simulation with agents: ', cfg % n_agents
         class default
@@ -120,12 +107,17 @@ contains
     subroutine step(this)
         class(StochasticPreferences), intent(inout) :: this
         integer(int64) :: i
-        real(rk) :: u
+        ! real(rk) :: u
+        real, dimension(:), allocatable :: u_list
+
+        ! Leverage doing RNG all at once
+        allocate(u_list(size(this % pop)))
+        call random_number(u_list)
 
         ! Step 1: Update stochastic preferences (new random values each period)
         do i = 1, size(this % pop)
-            call random_number(u)
-            this % pop(i) % preference = u
+! \            call random_number(this % pop(i) % preference)
+            this % pop(i) % preference = u_list(i)
         end do
 
         ! Step 2: Compute market-clearing price
@@ -135,17 +127,17 @@ contains
         call this % update_agent_allocations()
 
         ! Step 4: Validate market clearing constraints
-        ! TODO update this to allow for fluctuations in prices
-        ! call this % validate_market_clearing()
+        call this % validate_market_clearing(0.1_rk)
     end subroutine step
 
     !------------------------------------------------------------
     ! Validate that market clearing constraints are satisfied
     ! Sum of all good_a must equal alpha*N and sum of all good_b must equal beta*N
-    subroutine validate_market_clearing(this)
+    subroutine validate_market_clearing(this, tolerance)
         class(StochasticPreferences), intent(in) :: this
+        real(rk), intent(in) :: tolerance ! Relative error to allow for fluctuations
         real(rk) :: total_good_a, total_good_b, expected_total_a, expected_total_b
-        real(rk) :: tolerance, error_a, error_b
+        real(rk) :: error_a, error_b
         integer(int64) :: i
 
         ! Calculate actual totals
@@ -160,9 +152,6 @@ contains
         expected_total_a = this % alpha * real(size(this % pop), rk)
         expected_total_b = this % beta * real(size(this % pop), rk)
 
-        ! Set tolerance (relative error)
-        ! tolerance = 1.0e-6_rk
-        tolerance = 0.001
 
         ! Calculate relative errors
         error_a = abs(total_good_a - expected_total_a) / max(expected_total_a, 1.0e-12_rk)
@@ -205,11 +194,12 @@ contains
         end do
 
         ! Avoid division by zero with a larger safety margin
-        ! if (denominator > 1.0e-8_rk) then
-        !     this % price = numerator / denominator
-        ! else
+        if (denominator > 1.0e-8_rk) then
+            this % price = numerator / denominator
+        end if
         !     this % price = 1.0_rk  ! Default fallback price
         ! end if
+        this % price = numerator / denominator
 
         ! Ensure price stays within reasonable bounds
         if (this % price <= 0.0_rk .or. this % price > 1.0e6_rk) then
@@ -219,33 +209,20 @@ contains
     end subroutine compute_market_price
 
     !------------------------------------------------------------
-    ! Update agent allocations using equations (8) from Silver et al. 2002
-    ! Matrix form: (a_it, b_it) = (f_it/(1-f_it)/θ_t, 1/θ_t) * (a_(i,t-1), b_(i,t-1))
+    ! Update agent allocations
     subroutine update_agent_allocations(this)
         class(StochasticPreferences), intent(inout) :: this
         integer(int64) :: i
         real(rk) :: old_a, old_b, f_it, theta_t
-        ! real(rk) :: m11, m12, m21, m22  ! Matrix elements
 
         theta_t = this % price
 
         ! Update each agent's holdings
-        do i = 1, size(this % pop)
+        ! do i = 1, size(this % pop)
+        do concurrent(i=1:size(this % pop))
             old_a = this % pop(i) % good_a
             old_b = this % pop(i) % good_b
             f_it = this % pop(i) % preference
-
-            ! ! Matrix elements from equation (8):
-            ! ! M = (f_it           (1-f_it)/θ_t )
-            ! !     ((1-f_it)*θ_t      f_it     )
-            ! m11 = f_it
-            ! m12 = (1.0_rk - f_it) / theta_t
-            ! m21 = (1.0_rk - f_it) * theta_t
-            ! m22 = f_it
-
-            ! ! Apply matrix transformation: (a_it, b_it) = M * (a_(i,t-1), b_(i,t-1))
-            ! this % pop(i) % good_a = m11 * old_a + m12 * old_b
-            ! this % pop(i) % good_b = m21 * old_a + m22 * old_b
 
             ! Use equation (7), substituting in price appropriately
             this % pop(i) % good_a = (f_it * old_a) + (f_it * old_b * theta_t)
@@ -281,59 +258,6 @@ contains
         close (unit)
         write (*, '(a,a)') 'Population data written to: ', filename
     end subroutine write_population_csv
-
-    !------------------------------------------------------------
-    ! Binary output for faster I/O and Python compatibility
-    subroutine write_population_binary(this, folder_name)
-        class(StochasticPreferences), intent(in) :: this
-        character(*), intent(in) :: folder_name
-        integer :: unit, ios, i
-        real(rk), allocatable :: good_a_list(:), good_b_list(:), preference_list(:), wealth_list(:)
-
-        ! Create output directory
-        call system('mkdir -p ' // folder_name)
-
-        ! Allocate arrays
-        allocate(good_a_list(size(this % pop)))
-        allocate(good_b_list(size(this % pop)))
-        allocate(preference_list(size(this % pop)))
-        allocate(wealth_list(size(this % pop)))
-
-        ! Copy data to arrays
-        do i = 1, size(this % pop)
-            good_a_list(i) = this % pop(i) % good_a
-            good_b_list(i) = this % pop(i) % good_b
-            preference_list(i) = this % pop(i) % preference
-            wealth_list(i) = this % pop(i) % wealth
-        end do
-
-        ! Write binary files
-        open (newunit=unit, file=trim(folder_name)//'/good_a.bin', access='stream', form='unformatted', status='replace', action='write', iostat=ios)
-        if (ios == 0) then
-            write (unit) good_a_list
-            close (unit)
-        end if
-
-        open (newunit=unit, file=trim(folder_name)//'/good_b.bin', access='stream', form='unformatted', status='replace', action='write', iostat=ios)
-        if (ios == 0) then
-            write (unit) good_b_list
-            close (unit)
-        end if
-
-        open (newunit=unit, file=trim(folder_name)//'/preference.bin', access='stream', form='unformatted', status='replace', action='write', iostat=ios)
-        if (ios == 0) then
-            write (unit) preference_list
-            close (unit)
-        end if
-
-        open (newunit=unit, file=trim(folder_name)//'/wealth.bin', access='stream', form='unformatted', status='replace', action='write', iostat=ios)
-        if (ios == 0) then
-            write (unit) wealth_list
-            close (unit)
-        end if
-
-        write (*, '(a,a)') 'Population binary data written to folder: ', folder_name
-    end subroutine write_population_binary
 
     !------------------------------------------------------------
     function compute_metrics(this) result(metrics)

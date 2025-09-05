@@ -6,6 +6,7 @@ module sim_factory_m
     use model_kinetic_ising_m
     use model_ccm_exchange_m
     use model_conservative_exchange_market_m
+    use model_stochastic_preferences_m
     implicit none
 
 contains
@@ -33,6 +34,8 @@ contains
             allocate (sim, source=CCMExchange())
         case ('ConservativeExchangeMarket')
             allocate (sim, source=ConservativeExchangeMarket())
+        case ('StochasticPreferences')
+            allocate (sim, source=StochasticPreferences())
         case default
             error stop 'Unknown simulation type: '//trim(sim_type)
         end select

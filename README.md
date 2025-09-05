@@ -32,6 +32,7 @@ Agent-based economic simulation framework leveraging CUDA Fortran and multicore 
     - `KineticIsing` - Extension of `SimpleExchange` where agents have buy/sell 'spins'
     - `CCMExchange` - Extension of `SimpleExchange` where agents have individual propsensities to save
     - `ConservativeExchangeMarket` - Proximity-based wealth redistribution model - reference (4)
+    - `StochasticPreferences` - Exchange market where agents have stochastic preferences for two goods - reference (5)
 - Builds with `gfortran` 15.1.0+ and `nvfortran`
 
 ## Commands
@@ -103,17 +104,17 @@ Classic models:
 - CPT model - section II.A of reference (3)
 - BM model (possibly discrete version) - section II.B of reference (3)
 
-Usage:
-- Create a development Dockerfile & accompanying devcontainer.json
-
 Continue going through reference (3) and identify more prebuilt models to include in the library
 
 ### Code Updates
 
+- Refactor PMA to flow from JSON inputs and allow for fitting up to 2 distributions to resulting densities
+- Create config files for deployment on AWS EC2 with Terraform & Docker Hub
+- Create a development Dockerfile & accompanying devcontainer.json
 - Benchmarks: gfortran cpu (serial) vs nvidia cpu (parallel) vs nvidia gpu
 - Update the sim_factory_m module with another routine to construct simulators without file I/O
 - Add some initial tests. Will likely need to expand the `AbtractSimulation` interface with some "test_" helper routines
-- Custom HDF5-like binary format instead of CSV for population data 
+- Custom HDF5-like binary format instead of CSV for population data (already experimented with and looks promising)
     - Folder containing binary files
     - Each binary file is directly an unformatted array that was formerly a CSV column
     - Should be readable with numpy np.fromfile
@@ -125,6 +126,7 @@ Continue going through reference (3) and identify more prebuilt models to includ
 2. Statistical mechanics of money (2000). https://doi.org/10.1007/s100510070114
 3. Twenty-five years of random asset exchange modeling (2024). https://link.springer.com/article/10.1140/epjb/s10051-024-00695-3
 4. Wealth redistribution in our small world (2003). https://doi.org/10.1016/S0378-4371(03)00430-8. https://www.if.ufrgs.br/~iglesias/Wealth%20small%20world.pdf
+5. Statistical Equilibrium Wealth Distributions in an Exchange Economy with Stochastic Preferences (2002) https://doi.org/10.1006/jeth.2001.2897
 
 ## Other Notes
 - Apparently gfortran needs .nml files to end in a newline character... [link](https://stackoverflow.com/a/46249863)

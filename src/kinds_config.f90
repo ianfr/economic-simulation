@@ -41,7 +41,7 @@ module config_m
         real(rk)       :: init_cash = 100.0_rk
         real(rk)       :: debt_limit = 0.0_rk  ! Maximum debt allowed (0.0 = debt-free)
         real(rk)       :: exchange_delta = 1.0_rk  ! Amount to exchange between agents
-        integer(int64) :: seed = 20250715
+        integer(int64) :: seed = 0
         integer(int64) :: write_every = 1000
     contains
         procedure :: read_nml
@@ -55,7 +55,7 @@ module config_m
         real(rk)       :: debt_limit = 0.0_rk  ! Maximum debt allowed (0.0 = debt-free)
         real(rk)       :: exchange_delta = 1.0_rk  ! Amount to exchange between agents
         real(rk)       :: flip_prob = 0.01_rk  ! Probability of random spin flip
-        integer(int64) :: seed = 20250715
+        integer(int64) :: seed = 0
         integer(int64) :: write_every = 1000
     contains
         procedure :: read_nml => read_nml_kinetic_ising
@@ -70,7 +70,7 @@ module config_m
         real(rk)       :: exchange_delta = 1.0_rk  ! Amount to exchange between agents
         real(rk)       :: min_saving_propensity = 0.1_rk  ! Minimum individual saving propensity
         real(rk)       :: max_saving_propensity = 0.9_rk  ! Maximum individual saving propensity
-        integer(int64) :: seed = 20250715
+        integer(int64) :: seed = 0
         integer(int64) :: write_every = 1000
     contains
         procedure :: read_nml => read_nml_ccm_exchange
@@ -80,13 +80,25 @@ module config_m
     type, extends(AbstractConfig) :: Config_ConservativeExchangeMarket
         integer(int64) :: n_agents = 1000
         integer(int64) :: n_steps = 10000
-        integer(int64) :: seed = 20250715
+        integer(int64) :: seed = 0
         integer(int64) :: write_every = 1000
         integer :: k = 1 ! Number of nearest neighbors on each side
         real(rk) :: rewiring_probability = 0.1_rk ! Probability of rewiring connections
     contains
         procedure :: read_nml => read_nml_conservative_exchange_market
     end type Config_ConservativeExchangeMarket
+
+    ! Configuration type for Stochastic Preferences simulations
+    type, extends(AbstractConfig) :: Config_StochasticPreferences
+        integer(int64) :: n_agents = 1000
+        integer(int64) :: n_steps = 10000
+        real(rk)       :: alpha = 0.5_rk           ! Conservation parameter for good A (αN total)
+        real(rk)       :: beta = 0.5_rk            ! Conservation parameter for good B (βN total)
+        integer(int64) :: seed = 0
+        integer(int64) :: write_every = 1000
+    contains
+        procedure :: read_nml => read_nml_stochastic_preferences
+    end type Config_StochasticPreferences
 
 contains
 
@@ -136,6 +148,8 @@ contains
             allocate (cfg, source=Config_CCMExchange())
         case ('ConservativeExchangeMarket')
             allocate (cfg, source=Config_ConservativeExchangeMarket())
+        case ('StochasticPreferences')
+            allocate (cfg, source=Config_StochasticPreferences())
         case default
             error stop 'Unknown simulation type: '//trim(sim_type)
         end select
@@ -290,5 +304,40 @@ contains
             this % rewiring_probability = rewiring_probability
         end if
     end subroutine read_nml_conservative_exchange_market
+
+    ! Read the configuration from 'in.nml' for Stochastic Preferences simulation
+    subroutine read_nml_stochastic_preferences(this)
+        class(Config_StochasticPreferences), intent(inout) :: this
+
+        logical :: nml_exists
+        integer(int64) :: n_agents, n_steps, seed, write_every
+        real(rk) :: alpha, beta
+
+        namelist /run/ n_agents, n_steps, seed, write_every, alpha, beta
+
+        inquire (file='in.nml', exist=nml_exists)
+
+        if (nml_exists) then
+            ! Initialize with current values
+            n_agents = this % n_agents
+            n_steps = this % n_steps
+            seed = this % seed
+            write_every = this % write_every
+            alpha = this % alpha
+            beta = this % beta
+
+            open (unit=10, file='in.nml', status='old', action='read')
+            read (10, nml=run)
+            close (10)
+
+            ! Update object with read values
+            this % n_agents = n_agents
+            this % n_steps = n_steps
+            this % seed = seed
+            this % write_every = write_every
+            this % alpha = alpha
+            this % beta = beta
+        end if
+    end subroutine read_nml_stochastic_preferences
 
 end module config_m

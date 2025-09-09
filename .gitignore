@@ -17,3 +17,5 @@ nsys*
 **__pycache__**
 
 notes.txt
+
+terraform/.terraform/

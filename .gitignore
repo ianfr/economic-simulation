@@ -17,3 +17,7 @@ nsys*
 **__pycache__**
 
 notes.txt
+
+terraform/.terraform/
+
+terraform/terraform.tfstate.backup

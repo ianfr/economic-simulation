@@ -19,3 +19,5 @@ nsys*
 notes.txt
 
 terraform/.terraform/
+
+terraform/terraform.tfstate.backup

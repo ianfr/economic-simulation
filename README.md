@@ -104,7 +104,9 @@ The fortran package manager (v0.12.0+) is assumed to be installed at ~/fpm
 The Nvidia compiler is reccomended, however compatibility is maintained with the open-source `gfortran` compiler to be in line with JOSS reccomendations.
 - To get an updated gfortran, create a `conda` environment and run: 
     - `conda install -c conda-forge gfortran=15.1.0`
-    - `conda install conda-forge::hdf5`
+    - `conda config --add channels conda-forge`
+    - `conda config --set channel_priority strict`
+    - `conda install hdf5 openmpi openmpi-mpifort`
 
 Compilation notes:
 - To build with CPU parallelism instead of GPU with `nvfortran`, swap the commented out lines in nvfortran-environment-vars.sh

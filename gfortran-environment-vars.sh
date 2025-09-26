@@ -12,3 +12,9 @@ export FPM_FFLAGS="$FPM_FFLAGS -L/home/linuxuser/miniconda3/envs/gfortran/lib -I
 
 # For debugging, you might want to use:
 # export FPM_FFLAGS="-O0 -g -cpp -Wall -Werror -Wextra -free"
+
+# MPI
+# If MPI is needed, run `export FPM_FC=$MPIFC` before building with fpm
+export OMPI_FC=$FPM_FC # https://docs.open-mpi.org/en/v5.0.x/building-apps/customizing-wrappers.html
+export MPIFC=/home/linuxuser/miniconda3/envs/gfortran/bin/mpifort
+export MPIRUN=/home/linuxuser/miniconda3/envs/gfortran/bin/mpirun

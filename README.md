@@ -43,6 +43,8 @@ From top-level of the repo:
 - Run: `rm out/*; ~/fpm run`
 
 ### Post-process the results
+See *postprocess/README_analyze.md* for more details!
+
 From inside the postprocess folder, with the Python env activated (use python-3.12.11-requirements.txt to create env):
 - **Unified Analysis**: `rm histograms/* stats/*; python analyze.py`
     - Creates histograms with advanced distribution fitting (exponential, log-normal, gamma, etc.)

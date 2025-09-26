@@ -10,7 +10,6 @@ Agent-based economic simulation framework leveraging CUDA Fortran and multicore 
 | Conservative Exchange Market (CEM) (see Ref. 4): `wealth` Distribution | ![image](images/50000.step_wealth_CEM.png "") | ![image](images/ref.CEM.png "") |
 |CEM Population `wealth` Stats History (see Ref. 4) | ![image](images/wealth_combined_CEM.png "") |  _No maching reference material_ |
 
-
 ## Why is this Framework Useful for Researchers?
 
 - **Start right away**: Running included models and changing their parameters is as simple as editing two small text files.
@@ -37,23 +36,31 @@ Agent-based economic simulation framework leveraging CUDA Fortran and multicore 
 
 ## Commands
 
+### Build & Run
 From top-level of the repo:
 - Copy a pair of .nml files from the templates folder into the top-level directory
 - Build: `source nvfortran-environment-vars.sh && ~/fpm build`
 - Run: `rm out/*; ~/fpm run`
 
+### Post-process the results
 From inside the postprocess folder, with the Python env activated (use python-3.12.11-requirements.txt to create env):
-- Create histograms for Agent properties: `rm histograms/*; python histograms.py`
-    - OPTIONAL: Use the `-j` or `--threads` flag to set the number of parallel threads to use when plotting histograms
-    - OPTIONAL: Use the `-b` or `--bins` flag to set the number of bins to use for the histograms
-    - OPTIONAL: Use the `--boltzmann` flag to fit a Boltzmann probability distribution function to the histograms
-- Create plots of Agent summary stats and simulation metrics over time: `rm stats/*; python stats.py`
-    - OPTIONAL: Plot _only_ simulation metrics (like Gini coefficient) with `--metrics` flag
-    - OPTIONAL: Plot _only_ Agent population stats `--population` flag
+- **Unified Analysis**: `rm histograms/* stats/*; python analyze.py`
+    - Creates histograms with advanced distribution fitting (exponential, log-normal, gamma, etc.)
+    - Generates statistics plots over time for agent populations
+    - Produces simulation metrics visualization
+    - Uses JSON configuration for flexible analysis settings
+- **Configuration**: 
+    - First time: `python analyze.py --create-config` to generate default config
+    - Edit `analyze_config.json` to customize analysis (distributions to fit, data splitting, etc.)
+- **Selective Analysis**:
+    - Histograms only: `python analyze.py --histograms-only`
+    - Statistics only: `python analyze.py --stats-only`
+    - Metrics only: `python analyze.py --metrics-only`
 
-- Profiling (basic) (Adapted from [this book](https://shop.elsevier.com/books/cuda-fortran-for-scientists-and-engineers/ruetsch/978-0-443-21977-1)):
-    - `nsys profile -o nsys.log ~/fpm run`
-    - `nsys stats nsys.log.nsys-rep` - look at "CUDA GPU Kernel Summary" which has the `do concurrent` loops listed
+### Profiling
+- Profiling (basic) adapted from [this book](https://shop.elsevier.com/books/cuda-fortran-for-scientists-and-engineers/ruetsch/978-0-443-21977-1):
+- `nsys profile -o nsys.log ~/fpm run`
+- `nsys stats nsys.log.nsys-rep` - look at "CUDA GPU Kernel Summary" which has the `do concurrent` loops listed
 
 ## Setup Notes
 
@@ -144,7 +151,7 @@ Continue going through reference (3) and identify more prebuilt models to includ
 
 ### Code Updates
 
-- Refactor PMA to flow from JSON inputs and allow for fitting up to 2 distributions to resulting densities
+- ✅ **COMPLETED**: Refactor PMA to flow from JSON inputs and allow for fitting up to 2 distributions to resulting densities (now available in `analyze.py`)
 - Create config files for deployment on AWS EC2 with Terraform & Docker Hub
 - Create a development Dockerfile & accompanying devcontainer.json
 - Benchmarks: gfortran cpu (serial) vs nvidia cpu (parallel) vs nvidia gpu

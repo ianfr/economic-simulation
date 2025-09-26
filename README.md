@@ -152,9 +152,7 @@ Classic models:
 Continue going through reference (3) and identify more prebuilt models to include in the library
 
 ### Code Updates
-
-- ✅ **COMPLETED**: Refactor PMA to flow from JSON inputs and allow for fitting up to 2 distributions to resulting densities (now available in `analyze.py`)
-- Create config files for deployment on AWS EC2 with Terraform & Docker Hub
+- Parallel 'study' runner using MPI that can run on clusters
 - Create a development Dockerfile & accompanying devcontainer.json
 - Benchmarks: gfortran cpu (serial) vs nvidia cpu (parallel) vs nvidia gpu
 - Update the sim_factory_m module with another routine to construct simulators without file I/O

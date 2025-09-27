@@ -20,6 +20,9 @@ Agent-based economic simulation framework leveraging CUDA Fortran and multicore 
 
 - Implemented in modern Fortran (F2003+ OOP, F95+ dynamic arrays, etc.)
     - Uses the F2008 language feature [`do concurrent`](https://developer.nvidia.com/blog/using-fortran-standard-parallel-programming-for-gpu-acceleration/) and [OpenMP](https://www.openmp.org/wp-content/uploads/OpenMP-4.5-1115-F-web.pdf) for GPU/CPU parallelism
+- Distributed computing support in a cluster environment via:
+    - MPI for very large populations and/or complex agents<sup>1</sup>
+    - [GNU parallel](https://www.gnu.org/software/parallel/) for parallelized studies
 - Simplified build system using [fpm](https://fpm.fortran-lang.org/index.html)
 - Easy for users to build their own custom models with the framework using existing models as a guide
 - Python post-processing tools with optional CPU parallelism
@@ -33,6 +36,87 @@ Agent-based economic simulation framework leveraging CUDA Fortran and multicore 
     - `ConservativeExchangeMarket` - Proximity-based wealth redistribution model - reference (4)
     - `StochasticPreferences` - Exchange market where agents have stochastic preferences for two goods - reference (5)
 - Builds with `gfortran` 15.1.0+ and `nvfortran`
+
+<sup>1</sup> *MPI only implemented for `SimpleExchange` so far to showcase the capability*
+
+## Setup Notes (Local & Cloud)
+
+### Local Setup
+
+The fortran package manager (v0.12.0+) is assumed to be installed at ~/fpm
+
+**Tested compiler configurations**:
+|              | gfortran 15.1.0 | nvfortran 25.5-0 |
+| --- | ---- | ---- |
+| x64 Ubuntu 24.04        | ✅CPU       | 🔵GPU, ✅CPU           | 
+| arm64 Ubuntu 24.04       | ✅CPU       | ❓GPU, ❓CPU                    | 
+Key:
+- ✅ Supports `do concurrent` and MPI parallelism
+- 🔵 Supports `do concurrent` parallelism
+- ❓ Untested configuration
+- ❌ Unsupported configuration
+
+The `nvfortran` is reccomended, however compatibility is maintained with the open-source `gfortran` compiler to be in line with JOSS reccomendations.
+- To get an updated gfortran, create a `conda` environment and run: 
+    - `conda install -c conda-forge gfortran=15.1.0`
+    - `conda config --add channels conda-forge`
+    - `conda config --set channel_priority strict`
+    - `conda install openmpi openmpi-mpifort`
+
+Compilation notes:
+- To build with CPU std parallelism instead of GPU with `nvfortran`, swap the commented out lines in nvfortran-environment-vars.sh
+- To build with `gfortran` with CPU std parallelism, use `source gfortran-environment-vars.sh && ~/fpm build`
+    - Set the number of cores used with GFORT_N_CORES in gfortran-environment-vars.sh
+    - Set the gfortran 15.1+ compiler path in gfortran-environment-vars.sh
+- View `nvfortran` optimization printouts: `source nvfortran-environment-vars.sh && ~/fpm clean && rm -f compile.txt && ~/fpm build --verbose &> compile.txt`
+
+(Optional) for a better development experience use the Modern Fortran VS Code extension. On the main development machine the fortran language server is located in a conda env here: /home/linuxuser/miniconda3/envs/fortran-fortls along with fprettify for code formatting.
+
+**Using MPI**
+
+Building with MPI:
+- `source gfortran-environment-vars.sh MPI && ~/fpm build` or
+- `source nvfortran-environment-vars.sh MPI && ~/fpm build`
+
+Running with MPI on a single host with 4 cores: 
+`rm out/*; $MPIRUN -n 4 ~/fpm run` 
+
+Running with MPI on a cluster of nodes with 4 cores: 
+**TODO** - this will be its own tutorial in DISTRIBUTED.md once I run on my arm64 MPI cluster
+
+### Cloud Setup: Run in the Cloud on AWS EC2 with Terraform
+
+#### Cloud Setup: Boltamannomics + Terraform Overview
+
+Terraform and the AWS CLI are assumed to be installed, with AWS CLI credentials sourced in the current shell.
+
+Configs are located in the `terraform/` directory.
+
+Modify the instance type in `main.tf` as needed for more CPUs and/or to enable GPUs. Changing the disk size is possible too.
+
+A Docker image containing the dependencies needed for running Boltzmannomics is deployed on the EC2 machine for use there. Note that only `nvfortran` is supported and not `gfortran` since I ran into issues with building gfortran 15.1 from source.
+
+#### Cloud Setup: Deployment with Terraform and AWS
+
+1. `cd` to the terraform/ folder
+2. (One-Time) Generate an SSH key pair with `ssh-keygen -t rsa -b 4096 -f ~/.ssh/my_aws_key`
+3. Set the environment variables that hold your AWS CLI secret key credentials
+4. (One-Time) Initialize with `terraform init`
+5. Check with `terraform validate`
+6. Look over the plan with `terraform plan`
+7. Deploy with `terraform apply`
+    - Pulling the Boltzmannomics Docker container takes a few minutes because of the large NVidia HPC toolkit
+
+#### Cloud Setup: Use Boltzmannomics on the Terraform-Configured EC2 Instance
+
+Obtain the public ip address of the instance with `terraform show | grep ip`
+
+Connect via SSH to the instance with `ssh -i ~/.ssh/my_aws_key ubuntu@THE_PUBLIC_IP`
+
+Command to launch the Docker container with the Bolzmannomics framework mounted to /src: 
+`cd && sudo docker run --rm -it -v ${PWD}/economic-simulation:/src -w /src --gpus all ifriedri/economic-simulation-runtime:latest`
+
+Note that the `--gpus all` option does no harm if the EC2 machine has no GPU and `nvfortran` also works CPU-only.
 
 ## Commands
 
@@ -64,68 +148,6 @@ From inside the postprocess folder, with the Python env activated (use python-3.
 - `nsys profile -o nsys.log ~/fpm run`
 - `nsys stats nsys.log.nsys-rep` - look at "CUDA GPU Kernel Summary" which has the `do concurrent` loops listed
 
-## Setup Notes
-
-### Run in the Cloud on AWS EC2 with Terraform
-
-#### Boltamannomics + Terraform Overview
-
-Terraform and the AWS CLI are assumed to be installed, with AWS CLI credentials sourced in the current shell.
-
-Configs are located in the `terraform/` directory.
-
-Modify the instance type in `main.tf` as needed for more CPUs and/or to enable GPUs. Changing the disk size is possible too.
-
-A Docker image containing the dependencies needed for running Boltzmannomics is deployed on the EC2 machine for use there. Note that only `nvfortran` is supported and not `gfortran` since I ran into issues with building gfortran 15.1 from source.
-
-#### Deployment with Terraform and AWS
-
-1. `cd` to the terraform/ folder
-2. (One-Time) Generate an SSH key pair with `ssh-keygen -t rsa -b 4096 -f ~/.ssh/my_aws_key`
-3. Set the environment variables that hold your AWS CLI secret key credentials
-4. (One-Time) Initialize with `terraform init`
-5. Check with `terraform validate`
-6. Look over the plan with `terraform plan`
-7. Deploy with `terraform apply`
-    - Pulling the Boltzmannomics Docker container takes a few minutes because of the large NVidia HPC toolkit
-
-#### Use Boltzmannomics on the Terraform-Configured EC2 Instance
-
-Obtain the public ip address of the instance with `terraform show | grep ip`
-
-Connect via SSH to the instance with `ssh -i ~/.ssh/my_aws_key ubuntu@THE_PUBLIC_IP`
-
-Command to launch the Docker container with the Bolzmannomics framework mounted to /src: 
-`cd && sudo docker run --rm -it -v ${PWD}/economic-simulation:/src -w /src --gpus all ifriedri/economic-simulation-runtime:latest`
-
-Note that the `--gpus all` option does no harm if the EC2 machine has no GPU and `nvfortran` also works CPU-only.
-
-### Local Setup
-
-The fortran package manager (v0.12.0+) is assumed to be installed at ~/fpm
-
-**Tested compiler configurations**:
-|              | gfortran 15.1.0 (CPU) | nvfortran 25.5-0 |
-| --- | ---- | ---- |
-| x64 Ubuntu 24.04        | ✅       | ✅ GPU, CPU           | 
-| arm64 Ubuntu 24.04       | ❓       | ❓ CPU                    | 
-
-The Nvidia compiler is reccomended, however compatibility is maintained with the open-source `gfortran` compiler to be in line with JOSS reccomendations.
-- To get an updated gfortran, create a `conda` environment and run: 
-    - `conda install -c conda-forge gfortran=15.1.0`
-    - `conda config --add channels conda-forge`
-    - `conda config --set channel_priority strict`
-    - `conda install hdf5 openmpi openmpi-mpifort`
-
-Compilation notes:
-- To build with CPU parallelism instead of GPU with `nvfortran`, swap the commented out lines in nvfortran-environment-vars.sh
-- To build with `gfortran` with CPU parallelism, use `source gfortran-environment-vars.sh && ~/fpm build`
-    - Set the number of cores used with GFORT_N_CORES in gfortran-environment-vars.sh
-    - Set the gfortran 15.1+ compiler path in gfortran-environment-vars.sh
-- View `nvfortran` optimization printouts: `source nvfortran-environment-vars.sh && ~/fpm clean && rm -f compile.txt && ~/fpm build --verbose &> compile.txt`
-
-(Optional) for a better development experience use the Modern Fortran VS Code extension. On the main development machine the fortran language server is located in a conda env here: /home/linuxuser/miniconda3/envs/fortran-fortls along with fprettify for code formatting.
-
 ## Adding More Simulation Models
 
 Due to the abstraction in the code, the process for adding new models is straighforward:
@@ -154,6 +176,7 @@ Classic models:
 Continue going through reference (3) and identify more prebuilt models to include in the library
 
 ### Code Updates
+- DISTRIBUTED.md docs on running Boltzmannomics on an MPI cluster
 - Parallel 'study' runner using MPI that can run on clusters
 - Create a development Dockerfile & accompanying devcontainer.json
 - Benchmarks: gfortran cpu (serial) vs nvidia cpu (parallel) vs nvidia gpu

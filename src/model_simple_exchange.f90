@@ -9,6 +9,9 @@ module model_simple_exchange_m
     use rng_m
     use sim_base_m
     use abm_metrics_m
+#ifdef BOLTZ_USE_MPI
+#include "mpi.use"
+#endif
     implicit none
     public ! public by default, Agent below is private
 
@@ -45,7 +48,7 @@ contains
         type is (Config_SimpleExchange)
             call init_rng(cfg % seed)
             allocate (this % pop(cfg % n_agents))
-            do concurrent(i=1:cfg % n_agents)
+            do i=1, cfg % n_agents
                 this % pop(i) % cash = cfg % init_cash
             end do
             this % n_steps = cfg % n_steps
@@ -64,10 +67,37 @@ contains
         class(SimpleExchange), intent(inout) :: this
         integer :: n_pairs, p, i, j
         integer, allocatable :: perm(:)
+
+#ifdef BOLTZ_USE_MPI
+        integer :: ierr, rank, nprocs
+        integer :: p_begin, p_end
+#endif
+
         n_pairs = size(this % pop) / 2
         allocate (perm(size(this % pop)))
         perm = [(i, i=1, size(this % pop))]
         call shuffle_int(perm)
+
+#ifdef BOLTZ_USE_MPI
+        ! Get MPI information
+        call MPI_Comm_rank(MPI_COMM_WORLD, rank, ierr)
+        call MPI_Comm_size(MPI_COMM_WORLD, nprocs, ierr)
+        
+        ! Distribute pairs across processes
+        p_begin = rank * n_pairs / nprocs + 1
+        p_end = (rank + 1) * n_pairs / nprocs
+        
+        ! Each process works on its separate subset of pairs
+        do p = p_begin, p_end
+            i = perm(2 * p - 1); j = perm(2 * p)
+            ! Check if agent i can afford the transaction (cash >= debt_limit + exchange_delta)
+            if (this % pop(i) % cash >= -this % debt_limit + this % exchange_delta) then
+                this % pop(i) % cash = this % pop(i) % cash - this % exchange_delta
+                this % pop(j) % cash = this % pop(j) % cash + this % exchange_delta
+            end if
+        end do
+#else
+        ! optional std parallelism
         do concurrent(p=1:n_pairs)
             i = perm(2 * p - 1); j = perm(2 * p)
             ! Check if agent i can afford the transaction (cash >= debt_limit + exchange_delta)
@@ -76,6 +106,7 @@ contains
                 this % pop(j) % cash = this % pop(j) % cash + this % exchange_delta
             end if
         end do
+#endif
     end subroutine step
 
     !------------------------------------------------------------

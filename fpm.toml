@@ -10,6 +10,10 @@ auto-executables = true
 auto-tests = true
 auto-examples = true
 module-naming = false
+# Might not be needed actually 
+#   https://github.com/fortran-lang/fpm/issues/773
+#   https://fortran-lang.discourse.group/t/fpm-issue-with-preprocessor-defined-use-statements/8371/7
+external-modules = ["mpi"]
 
 [install]
 library = false

@@ -1,0 +1,2 @@
+! Workaround from https://github.com/fortran-lang/fpm/issues/773#issuecomment-2046865118
+use mpi_f08

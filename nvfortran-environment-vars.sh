@@ -1,12 +1,20 @@
-export FPM_FC=/opt/nvidia/hpc_sdk/Linux_x86_64/25.5/compilers/bin/nvfortran
+# Detect architecture automatically
+ARCH=$(uname -m)
+if [ "$ARCH" = "aarch64" ]; then
+    NVIDIA_ARCH="Linux_aarch64"
+else
+    NVIDIA_ARCH="Linux_x86_64"
+fi
+
+export FPM_FC=/opt/nvidia/hpc_sdk/${NVIDIA_ARCH}/25.5/compilers/bin/nvfortran
 
 # See https://forums.developer.nvidia.com/t/nvfortran-c-preprocessor-bug/292217
 export FPM_FFLAGS="-O2 -Minline -Mpreprocess -Wall -Werror -Wextra -Minfo=all"
 
 # MPI configuration
 export OMPI_FC=$FPM_FC
-export MPIFC=/opt/nvidia/hpc_sdk/Linux_x86_64/25.5/comm_libs/mpi/bin/mpifort
-export MPIRUN=/opt/nvidia/hpc_sdk/Linux_x86_64/25.5/comm_libs/mpi/bin/mpirun
+export MPIFC=/opt/nvidia/hpc_sdk/${NVIDIA_ARCH}/25.5/comm_libs/mpi/bin/mpifort
+export MPIRUN=/opt/nvidia/hpc_sdk/${NVIDIA_ARCH}/25.5/comm_libs/mpi/bin/mpirun
 
 # Check if MPI argument is provided
 if [ "$1" = "MPI" ]; then

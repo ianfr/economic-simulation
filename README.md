@@ -1,4 +1,7 @@
-# Boltzmannomics: A Framework for Agent-Based Economic Simulations Inspired by Statistical Physics
+![logo](images/logo.png)
+
+
+**Boltzmannomics**: A Framework for Agent-Based Economic Simulations Inspired by Statistical Physics
 
 Agent-based economic simulation framework leveraging CUDA Fortran and multicore processing for GPU and CPU parallelism. Models based on analogies with statistical physics such as kinetic exchange, spin flips, magnetization, and more.
 
@@ -22,7 +25,7 @@ Agent-based economic simulation framework leveraging CUDA Fortran and multicore 
     - Uses the F2008 language feature [`do concurrent`](https://developer.nvidia.com/blog/using-fortran-standard-parallel-programming-for-gpu-acceleration/) and [OpenMP](https://www.openmp.org/wp-content/uploads/OpenMP-4.5-1115-F-web.pdf) for GPU/CPU parallelism
 - Distributed computing support in a cluster environment via:
     - MPI for very large populations and/or complex agents<sup>1</sup>
-    - [GNU parallel](https://www.gnu.org/software/parallel/) for parallelized studies
+    - [Cluster Workload Manager](https://github.com/ianfr/cluster-workload-manager) for parallelized studies
 - Simplified build system using [fpm](https://fpm.fortran-lang.org/index.html)
 - Easy for users to build their own custom models with the framework using existing models as a guide
 - Python post-processing tools with optional CPU parallelism
@@ -49,10 +52,11 @@ The fortran package manager (v0.12.0+) is assumed to be installed at ~/fpm
 |              | gfortran 15.1.0 | nvfortran 25.5-0 |
 | --- | ---- | ---- |
 | x64 Ubuntu 24.04        | ✅CPU       | 🔵GPU, ✅CPU           | 
-| arm64 Ubuntu 24.04       | ✅CPU       | ❓GPU, ❓CPU                    | 
+| arm64 Ubuntu 24.04       | ✅CPU       | ❓GPU, ➕CPU                    | 
 Key:
-- ✅ Supports `do concurrent` and MPI parallelism
-- 🔵 Supports `do concurrent` parallelism
+- ✅ `do concurrent` and MPI parallelism
+- 🔵 `do concurrent` parallelism
+- ➕ MPI parallelism
 - ❓ Untested configuration
 - ❌ Unsupported configuration
 
@@ -178,6 +182,7 @@ Continue going through reference (3) and identify more prebuilt models to includ
 ### Code Updates
 - DISTRIBUTED.md docs on running Boltzmannomics on an MPI cluster
 - Parallel 'study' runner using MPI that can run on clusters
+- ABMs for financial markets & diverse pool of agents
 - Create a development Dockerfile & accompanying devcontainer.json
 - Benchmarks: gfortran cpu (serial) vs nvidia cpu (parallel) vs nvidia gpu
 - Update the sim_factory_m module with another routine to construct simulators without file I/O

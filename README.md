@@ -9,9 +9,10 @@ Agent-based economic simulation framework leveraging CUDA Fortran and multicore 
 
 | Description | Image | Reference Image |
 |----------|----------|---------|
-| Boltzmann PDF fit for simple exchange with debt (see Ref. 2): | ![image](images/50000.step_cash_boltzmann.png "Boltzmann PDF fit for simple exchange with debt") | ![image](images/ref.boltzmann.png "") |
-| Conservative Exchange Market (CEM) (see Ref. 4): `wealth` Distribution | ![image](images/50000.step_wealth_CEM.png "") | ![image](images/ref.CEM.png "") |
-|CEM Population `wealth` Stats History (see Ref. 4) | ![image](images/wealth_combined_CEM.png "") |  _No maching reference material_ |
+| Boltzmann PDF fit for simple exchange with debt (see Ref. 2): | ![image](images/10000.step_cash_boltzmann.png "Boltzmann PDF fit for simple exchange with debt") | ![image](images/ref.boltzmann.png "") |
+| Conservative Exchange Market (CEM) (see Ref. 4): `wealth` distribution (k=2) | ![image](images/500000.step_wealth_CEM.png "") | ![image](images/ref.CEM.png "") |
+| Evolution of `wealth` over time for CEM above | ![image](images/distribution_evolution_wealth_CEM.png "") | - |
+|Population `wealth` stats history for CEM above | ![image](images/wealth_combined_CEM.png "") | - |
 
 ## Why is this Framework Useful for Researchers?
 
@@ -25,7 +26,7 @@ Agent-based economic simulation framework leveraging CUDA Fortran and multicore 
     - Uses the F2008 language feature [`do concurrent`](https://developer.nvidia.com/blog/using-fortran-standard-parallel-programming-for-gpu-acceleration/) and [OpenMP](https://www.openmp.org/wp-content/uploads/OpenMP-4.5-1115-F-web.pdf) for GPU/CPU parallelism
 - Distributed computing support in a cluster environment via:
     - MPI for very large populations and/or complex agents<sup>1</sup>
-    - [Cluster Workload Manager](https://github.com/ianfr/cluster-workload-manager) for parallelized studies
+    - [Cluster Workload Manager](https://github.com/ianfr/cluster-workload-manager) or Slurm for parallelized studies
 - Simplified build system using [fpm](https://fpm.fortran-lang.org/index.html)
 - Easy for users to build their own custom models with the framework using existing models as a guide
 - Python post-processing tools with optional CPU parallelism

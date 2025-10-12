@@ -1,13 +1,11 @@
-"""
- /$$$$$$$            /$$   /$$                                                                                  /$$                    
-| $$__  $$          | $$  | $$                                                                                 |__/                    
-| $$  \ $$  /$$$$$$ | $$ /$$$$$$  /$$$$$$$$ /$$$$$$/$$$$   /$$$$$$  /$$$$$$$  /$$$$$$$   /$$$$$$  /$$$$$$/$$$$  /$$  /$$$$$$$  /$$$$$$$
-| $$$$$$$  /$$__  $$| $$|_  $$_/ |____ /$$/| $$_  $$_  $$ |____  $$| $$__  $$| $$__  $$ /$$__  $$| $$_  $$_  $$| $$ /$$_____/ /$$_____/
-| $$__  $$| $$  \ $$| $$  | $$      /$$$$/ | $$ \ $$ \ $$  /$$$$$$$| $$  \ $$| $$  \ $$| $$  \ $$| $$ \ $$ \ $$| $$| $$      |  $$$$$$ 
-| $$  \ $$| $$  | $$| $$  | $$ /$$ /$$__/  | $$ | $$ | $$ /$$__  $$| $$  | $$| $$  | $$| $$  | $$| $$ | $$ | $$| $$| $$       \____  $$
-| $$$$$$$/|  $$$$$$/| $$  |  $$$$//$$$$$$$$| $$ | $$ | $$|  $$$$$$$| $$  | $$| $$  | $$|  $$$$$$/| $$ | $$ | $$| $$|  $$$$$$$ /$$$$$$$/
-|_______/  \______/ |__/   \___/ |________/|__/ |__/ |__/ \_______/|__/  |__/|__/  |__/ \______/ |__/ |__/ |__/|__/ \_______/|_______/ 
-"""
+#  /$$$$$$$            /$$   /$$                                                                                  /$$                    
+# | $$__  $$          | $$  | $$                                                                                 |__/                    
+# | $$  \ $$  /$$$$$$ | $$ /$$$$$$  /$$$$$$$$ /$$$$$$/$$$$   /$$$$$$  /$$$$$$$  /$$$$$$$   /$$$$$$  /$$$$$$/$$$$  /$$  /$$$$$$$  /$$$$$$$
+# | $$$$$$$  /$$__  $$| $$|_  $$_/ |____ /$$/| $$_  $$_  $$ |____  $$| $$__  $$| $$__  $$ /$$__  $$| $$_  $$_  $$| $$ /$$_____/ /$$_____/
+# | $$__  $$| $$  \ $$| $$  | $$      /$$$$/ | $$ \ $$ \ $$  /$$$$$$$| $$  \ $$| $$  \ $$| $$  \ $$| $$ \ $$ \ $$| $$| $$      |  $$$$$$ 
+# | $$  \ $$| $$  | $$| $$  | $$ /$$ /$$__/  | $$ | $$ | $$ /$$__  $$| $$  | $$| $$  | $$| $$  | $$| $$ | $$ | $$| $$| $$       \____  $$
+# | $$$$$$$/|  $$$$$$/| $$  |  $$$$//$$$$$$$$| $$ | $$ | $$|  $$$$$$$| $$  | $$| $$  | $$|  $$$$$$/| $$ | $$ | $$| $$|  $$$$$$$ /$$$$$$$/
+# |_______/  \______/ |__/   \___/ |________/|__/ |__/ |__/ \_______/|__/  |__/|__/  |__/ \______/ |__/ |__/ |__/|__/ \_______/|_______/ 
 
 """
 Unified analysis script for economic simulation post-processing.
@@ -100,13 +98,15 @@ def create_default_config(config_path: str):
                     "distributions_high": ["lognorm"]
                 }
             },
-            "fit_quality_threshold": 0.05
+            "fit_quality_threshold": {
+                "KS_p_value": 0.05,
+                "R_squared": 0.80
+            }
         },
         "plotting": {
             "figure_size": [10, 6],
             "dpi": 300,
             "show_fit_statistics": True,
-            "include_qq_plots": False,
             "seaborn_style": "whitegrid",
             "seaborn_palette": "husl",
             "seaborn_context": "notebook"
@@ -124,6 +124,64 @@ def extract_time_from_filename(filename: str) -> Optional[int]:
     if match:
         return int(match.group(1))
     return None
+
+def format_distribution_formula(dist_name: str, params: Dict[str, float]) -> str:
+    """
+    Format the distribution formula with parameters rounded to 2 decimal places.
+    
+    Returns a LaTeX-style string for the distribution formula.
+    """
+    # Common distributions with their formulas
+    if dist_name == 'expon':
+        # Exponential: f(x) = (1/λ) * exp(-(x-loc)/λ) where λ = scale
+        scale = params.get('scale', 1.0)
+        loc = params.get('loc', 0.0)
+        if abs(loc) < 0.01:
+            return f"$f(x) = \\frac{{1}}{{{scale:.2f}}} e^{{-x/{scale:.2f}}}$"
+        else:
+            return f"$f(x) = \\frac{{1}}{{{scale:.2f}}} e^{{-(x-{loc:.2f})/{scale:.2f}}}$"
+    
+    elif dist_name == 'norm':
+        # Normal: f(x) = (1/(σ√(2π))) * exp(-((x-μ)²)/(2σ²))
+        mu = params.get('loc', 0.0)
+        sigma = params.get('scale', 1.0)
+        return f"$f(x) = \\mathcal{{N}}({mu:.2f}, {sigma:.2f}^2)$"
+    
+    elif dist_name == 'lognorm':
+        # Lognormal: requires s (shape), loc, scale
+        s = params.get('s', 1.0) if 's' in params else list(params.values())[0]
+        loc = params.get('loc', 0.0)
+        scale = params.get('scale', 1.0)
+        return f"$f(x) = \\text{{LogNorm}}(s={s:.2f}, \\mu={loc:.2f}, \\sigma={scale:.2f})$"
+    
+    elif dist_name == 'gamma':
+        # Gamma: requires a (shape), loc, scale
+        a = params.get('a', 1.0) if 'a' in params else list(params.values())[0]
+        loc = params.get('loc', 0.0)
+        scale = params.get('scale', 1.0)
+        if abs(loc) < 0.01:
+            return f"$f(x) = \\text{{Gamma}}(\\alpha={a:.2f}, \\beta={1/scale:.2f})$"
+        else:
+            return f"$f(x) = \\text{{Gamma}}(\\alpha={a:.2f}, \\beta={1/scale:.2f}, \\mu={loc:.2f})$"
+    
+    elif dist_name == 'weibull_min':
+        # Weibull: requires c (shape), loc, scale
+        c = params.get('c', 1.0) if 'c' in params else list(params.values())[0]
+        loc = params.get('loc', 0.0)
+        scale = params.get('scale', 1.0)
+        return f"$f(x) = \\text{{Weibull}}(k={c:.2f}, \\lambda={scale:.2f})$"
+    
+    elif dist_name == 'pareto':
+        # Pareto: requires b (shape), loc, scale
+        b = params.get('b', 1.0) if 'b' in params else list(params.values())[0]
+        loc = params.get('loc', 0.0)
+        scale = params.get('scale', 1.0)
+        return f"$f(x) = \\text{{Pareto}}(\\alpha={b:.2f}, x_m={scale:.2f})$"
+    
+    else:
+        # Generic format for other distributions
+        param_str = ", ".join([f"{k}={v:.2f}" for k, v in params.items()])
+        return f"${dist_name}({param_str})$"
 
 def fit_distribution(data: np.ndarray, dist_name: str) -> Tuple[Any, float, Dict[str, float]]:
     """
@@ -147,8 +205,25 @@ def fit_distribution(data: np.ndarray, dist_name: str) -> Tuple[Any, float, Dict
             warnings.simplefilter("ignore")
             params = dist.fit(clean_data)
         
-        # Perform Kolmogorov-Smirnov test
-        ks_stat, p_value = stats.kstest(clean_data, lambda x: dist.cdf(x, *params))
+        # For goodness-of-fit, use R-squared instead of KS test for large samples
+        # R-squared measures how well the theoretical quantiles match empirical quantiles
+        if len(clean_data) > 1000:
+            # Use Q-Q plot R-squared as a goodness-of-fit measure
+            # This is more appropriate for large datasets and fitted parameters
+            sorted_data = np.sort(clean_data)
+            theoretical_quantiles = dist.ppf(np.linspace(0.01, 0.99, len(sorted_data)), *params)
+            
+            # Calculate R-squared between theoretical and empirical quantiles
+            ss_res = np.sum((sorted_data - theoretical_quantiles) ** 2)
+            ss_tot = np.sum((sorted_data - np.mean(sorted_data)) ** 2)
+            r_squared = 1 - (ss_res / ss_tot)
+            
+            # Convert R-squared to a "quality score" between 0 and 1
+            # R-squared > 0.9 is excellent, < 0.7 is poor
+            p_value = max(0.0, min(1.0, r_squared))  # Use R-squared as quality metric
+        else:
+            # For smaller datasets, use traditional KS test
+            ks_stat, p_value = stats.kstest(clean_data, lambda x: dist.cdf(x, *params))
         
         # Create parameter dictionary
         param_names = dist.shapes.split(',') if dist.shapes else []
@@ -164,25 +239,30 @@ def fit_distribution(data: np.ndarray, dist_name: str) -> Tuple[Any, float, Dict
 def fit_distributions_to_data(data: np.ndarray, distributions: List[str], 
                             fit_threshold: float = 0.05) -> List[Tuple[str, Any, float, Dict[str, float]]]:
     """
-    Fit multiple distributions to data and return results sorted by p-value.
+    Fit multiple distributions to data and return results sorted by quality metric.
     
     Returns:
-        List of (dist_name, fitted_distribution, p_value, parameters)
+        List of (dist_name, fitted_distribution, quality_metric, parameters)
+        quality_metric is R² for large datasets (>1000) or p-value for small datasets
     """
     results = []
+    
+    # Determine if we're using R² or p-value based on data size
+    use_r_squared = len(data) > 1000
+    metric_name = "R²" if use_r_squared else "p-value"
     
     for dist_name in distributions:
         if dist_name not in AVAILABLE_DISTRIBUTIONS:
             print(f"Warning: Distribution '{dist_name}' not available. Skipping.")
             continue
             
-        fitted_dist, p_value, params = fit_distribution(data, dist_name)
-        print(f"  {dist_name}: p-value = {p_value:.6f} (threshold = {fit_threshold})")
+        fitted_dist, quality_metric, params = fit_distribution(data, dist_name)
+        print(f"  {dist_name}: {metric_name} = {quality_metric:.6f} (threshold = {fit_threshold:.2f})")
         
-        if fitted_dist is not None and p_value >= fit_threshold:
-            results.append((dist_name, fitted_dist, p_value, params))
+        if fitted_dist is not None and quality_metric >= fit_threshold:
+            results.append((dist_name, fitted_dist, quality_metric, params))
     
-    # Sort by p-value (descending - better fits first)
+    # Sort by quality metric (descending - better fits first)
     results.sort(key=lambda x: x[2], reverse=True)
     
     return results
@@ -247,7 +327,15 @@ def create_histogram_with_fits(data: pd.Series, column_name: str, file_name: str
         if fit_config.get('enabled', False) and column_name in fit_config.get('variables', {}):
             var_config = fit_config.get('variables', {}).get(column_name, {})
             split_value = var_config.get('split_value')
-            fit_threshold = fit_config.get('fit_quality_threshold', 0.05)
+            
+            # Get appropriate threshold based on data size
+            threshold_config = fit_config.get('fit_quality_threshold', {})
+            if isinstance(threshold_config, dict):
+                # New format with separate thresholds
+                fit_threshold = threshold_config.get('R_squared', 0.80) if len(clean_data) > 1000 else threshold_config.get('KS_p_value', 0.05)
+            else:
+                # Legacy format: single threshold value
+                fit_threshold = threshold_config
             
             if split_value is not None:
                 # Split data and fit separately - require explicit distributions for each part
@@ -273,6 +361,9 @@ def create_histogram_with_fits(data: pd.Series, column_name: str, file_name: str
                     low_proportion = len(low_data) / total_data
                     high_proportion = len(high_data) / total_data
                     
+                    # Determine label format based on dataset size
+                    quality_label = "R²" if len(clean_data) > 1000 else "p"
+                    
                     # Plot fits for low data with seaborn color palette
                     x_low = np.linspace(clean_data.min(), split_value, 100)
                     colors_low = ['#FF4444', '#CC0000']  # Bright red colors for low fits
@@ -284,7 +375,7 @@ def create_histogram_with_fits(data: pd.Series, column_name: str, file_name: str
                         y_low_scaled = y_low * low_proportion
                         plt.plot(x_low, y_low_scaled, color=colors_low[i % len(colors_low)], 
                                linewidth=3, linestyle='--',
-                               label=f'{dist_name} (low, p={p_value:.3f})')
+                               label=f'{dist_name} (low, {quality_label}={p_value:.3f})')
                     
                     # Plot fits for high data with more contrasting colors
                     x_high = np.linspace(split_value, clean_data.max(), 100)
@@ -295,7 +386,7 @@ def create_histogram_with_fits(data: pd.Series, column_name: str, file_name: str
                         y_high_scaled = y_high * high_proportion
                         plt.plot(x_high, y_high_scaled, color=colors_high[i % len(colors_high)], 
                                linewidth=3, linestyle='-.',
-                               label=f'{dist_name} (high, p={p_value:.3f})')
+                               label=f'{dist_name} (high, {quality_label}={p_value:.3f})')
                     
                     # Add vertical line at split
                     plt.axvline(split_value, color='black', linestyle=':', 
@@ -314,10 +405,13 @@ def create_histogram_with_fits(data: pd.Series, column_name: str, file_name: str
                     x_range = np.linspace(clean_data.min(), clean_data.max(), 200)
                     colors = ['#FF4444', '#00AA00', '#FF8800', '#8800FF']  # High contrast colors
                     
+                    # Determine label format based on dataset size
+                    quality_label = "R²" if len(clean_data) > 1000 else "p"
+                    
                     for i, (dist_name, fitted_dist, p_value, params) in enumerate(fits[:2]):
                         y_fit = fitted_dist.pdf(x_range)
                         plt.plot(x_range, y_fit, color=colors[i % len(colors)], 
-                               linewidth=3, label=f'{dist_name} (p={p_value:.3f})')
+                               linewidth=3, label=f'{dist_name} ({quality_label}={p_value:.3f})')
                     
                     fit_results = {'fits': fits}
         
@@ -329,7 +423,7 @@ def create_histogram_with_fits(data: pd.Series, column_name: str, file_name: str
         
         # Seaborn automatically provides better grid styling
         
-        # Add statistics text if enabled
+        # Add statistics text if enabled (positioned at the very top right)
         if fig_config.get('show_fit_statistics', True):
             stats_text = f'Count: {len(clean_data)}\n'
             stats_text += f'Mean: {clean_data.mean():.3f}\n'
@@ -344,6 +438,34 @@ def create_histogram_with_fits(data: pd.Series, column_name: str, file_name: str
         # Add legend if there are fits
         if fit_results:
             plt.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+            
+            # Add fitted formula text in the lower right corner, just above where legend typically appears
+            formula_text = ""
+            
+            if 'fits' in fit_results:
+                # Non-split case: show up to 2 formulas
+                for i, (dist_name, fitted_dist, p_value, params) in enumerate(fit_results['fits'][:2]):
+                    formula = format_distribution_formula(dist_name, params)
+                    formula_text += f"{formula}\n"
+            
+            elif 'low_fits' in fit_results or 'high_fits' in fit_results:
+                # Split case: show formulas for low and high
+                if 'low_fits' in fit_results and fit_results['low_fits']:
+                    for i, (dist_name, fitted_dist, p_value, params) in enumerate(fit_results['low_fits'][:1]):
+                        formula = format_distribution_formula(dist_name, params)
+                        formula_text += f"Low: {formula}\n"
+                
+                if 'high_fits' in fit_results and fit_results['high_fits']:
+                    for i, (dist_name, fitted_dist, p_value, params) in enumerate(fit_results['high_fits'][:1]):
+                        formula = format_distribution_formula(dist_name, params)
+                        formula_text += f"High: {formula}\n"
+            
+            if formula_text:
+                # Position formula box in lower right, just above typical legend position
+                # This places it at the bottom right of the plot area
+                plt.text(0.98, 0.08, formula_text.strip(), transform=plt.gca().transAxes,
+                        verticalalignment='bottom', horizontalalignment='right', fontsize=11,
+                        bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.95, edgecolor='orange', linewidth=1.5))
         
         # Save the plot
         dpi = fig_config.get('dpi', 300)
@@ -491,7 +613,7 @@ def create_histograms(config: Dict[str, Any], out_dir: Path):
                 fits = result['fit_results']
                 if 'fits' in fits:
                     for dist_name, _, p_value, _ in fits['fits'][:2]:
-                        print(f"  Fitted {dist_name} (p={p_value:.3f})")
+                        print(f"  Fitted {dist_name} (quality={p_value:.3f})")
                 elif 'low_fits' in fits and 'high_fits' in fits:
                     print(f"  Split at {fits['split_value']}")
                     for dist_name, _, p_value, _ in fits['low_fits'][:1]:
@@ -794,12 +916,13 @@ def create_distribution_evolution_plots(config: Dict[str, Any], out_dir: Path):
                 # Combine all data
                 combined_df = pd.concat(data_for_plot, ignore_index=True)
                 
-                # Create overlapping density plots using seaborn
+                # Create overlapping density plots using seaborn KDE only (no histogram bars)
+                # This is cleaner for showing evolution over time
                 for i, (time_step, _) in enumerate(selected_files):
                     timestep_data = combined_df[combined_df['timestep'] == f'T={time_step}'][col_name]
                     if len(timestep_data) > 0:
-                        sns.histplot(timestep_data, kde=True, stat='density', alpha=0.6, 
-                                   label=f'T={time_step}', bins=30)
+                        sns.kdeplot(timestep_data, linewidth=2.5, alpha=0.8, 
+                                   label=f'T={time_step}')
                 
                 plt.xlabel(col_name.replace('_', ' ').title(), fontsize=12)
                 plt.ylabel('Density', fontsize=12)

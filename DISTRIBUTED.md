@@ -4,12 +4,12 @@
 
 In general, there are 3 ways to take advantage of parallelism with Boltzmannomics:
 1. Running a single simulation at once on a single host ➡️ use `do concurrent` on CPU or GPU
-2. Running a large batch of simulations that are each relatively small (a 'study') ➡️ use [Cluster Workload Manager](https://github.com/ianfr/cluster-workload-manager)
+2. Running a large batch of simulations that are each relatively small (a 'study') ➡️ use [Cluster Workload Manager](https://github.com/ianfr/cluster-workload-manager) or Slurm/PBS/etc.
 3. Running a simulation with a very large population and/or complex agents ➡️ use MPI on a cluster
 
 Summarized: 
 1. Single-host std parallelism
-2. Batch runs with [Cluster Workload Manager](https://github.com/ianfr/cluster-workload-manager)
+2. Batch runs with a workload manager
 3. Distributed simulation with MPI
 
 ## Single-host std parallelism

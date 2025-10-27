@@ -39,6 +39,7 @@ Agent-based economic simulation framework leveraging CUDA Fortran and multicore 
     - `CCMExchange` - Extension of `SimpleExchange` where agents have individual propsensities to save
     - `ConservativeExchangeMarket` - Proximity-based wealth redistribution model - reference (4)
     - `StochasticPreferences` - Exchange market where agents have stochastic preferences for two goods - reference (5)
+    - `BMClassSplit` - Bouchaud-Mézard model on heterogeneous network producing split Boltzmann-Pareto distribution - references (1) Fig. 7, (3)
 - Builds with `gfortran` 15.1.0+ and `nvfortran`
 
 <sup>1</sup> *MPI only implemented for `SimpleExchange` so far to showcase the capability*
@@ -176,13 +177,12 @@ See:
 
 Classic models:
 - CPT model - section II.A of reference (3)
-- BM model (possibly discrete version) - section II.B of reference (3)
+- ~~BM model (possibly discrete version) - section II.B of reference (3)~~ ✅ **DONE** - Implemented as `BMClassSplit`
+    - ~~Most interested in recreating Fig. 7 from Ref. 1 (split boltzmann-pareto). According to Ref. 3 "Garlaschelli and Loffredo (2004,2008) likewise showed that it is possible to retrieve a realistic mixed log-normal-power law distribution by simulating the model on a simple heterogeneous network with a smallnumber of 'hub' agents"~~ ✅ **DONE**
 
 Continue going through reference (3) and identify more prebuilt models to include in the library
 
 ### Code Updates
-- DISTRIBUTED.md docs on running Boltzmannomics on an MPI cluster
-- Parallel 'study' runner using MPI that can run on clusters
 - ABMs for financial markets & diverse pool of agents
 - Create a development Dockerfile & accompanying devcontainer.json
 - Benchmarks: gfortran cpu (serial) vs nvidia cpu (parallel) vs nvidia gpu

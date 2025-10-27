@@ -16,6 +16,7 @@ module sim_factory_m
     use model_ccm_exchange_m
     use model_conservative_exchange_market_m
     use model_stochastic_preferences_m
+    use model_bm_class_split_m
     implicit none
 
 contains
@@ -45,6 +46,8 @@ contains
             allocate (sim, source=ConservativeExchangeMarket())
         case ('StochasticPreferences')
             allocate (sim, source=StochasticPreferences())
+        case ('BMClassSplit')
+            allocate (sim, source=BMClassSplit())
         case default
             error stop 'Unknown simulation type: '//trim(sim_type)
         end select

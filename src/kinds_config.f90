@@ -109,6 +109,21 @@ module config_m
         procedure :: read_nml => read_nml_stochastic_preferences
     end type Config_StochasticPreferences
 
+    ! Configuration type for BM Class Split simulations
+    type, extends(AbstractConfig) :: Config_BMClassSplit
+        integer(int64) :: n_agents = 1000
+        integer(int64) :: n_steps = 100000
+        real(rk)       :: init_cash = 100.0_rk
+        real(rk)       :: hub_fraction = 0.05_rk     ! Fraction of agents that are hubs
+        integer        :: hub_connectivity = 20       ! Average connections per hub
+        integer        :: regular_connectivity = 3    ! Average connections per regular agent
+        real(rk)       :: wealth_bias_strength = 0.5_rk  ! Wealth-dependent exchange bias
+        integer(int64) :: seed = 0
+        integer(int64) :: write_every = 1000
+    contains
+        procedure :: read_nml => read_nml_bm_class_split
+    end type Config_BMClassSplit
+
 contains
 
     ! Helper function to write an array to an unformatted binary file
@@ -159,6 +174,8 @@ contains
             allocate (cfg, source=Config_ConservativeExchangeMarket())
         case ('StochasticPreferences')
             allocate (cfg, source=Config_StochasticPreferences())
+        case ('BMClassSplit')
+            allocate (cfg, source=Config_BMClassSplit())
         case default
             error stop 'Unknown simulation type: '//trim(sim_type)
         end select
@@ -348,5 +365,48 @@ contains
             this % beta = beta
         end if
     end subroutine read_nml_stochastic_preferences
+
+    ! Read the configuration from 'in.nml' for BM Class Split simulation
+    subroutine read_nml_bm_class_split(this)
+        class(Config_BMClassSplit), intent(inout) :: this
+
+        logical :: nml_exists
+        integer(int64) :: n_agents, n_steps, seed, write_every
+        real(rk) :: init_cash, hub_fraction, wealth_bias_strength
+        integer :: hub_connectivity, regular_connectivity
+
+        namelist /run/ n_agents, n_steps, seed, write_every, init_cash, &
+            hub_fraction, hub_connectivity, regular_connectivity, wealth_bias_strength
+
+        inquire (file='in.nml', exist=nml_exists)
+
+        if (nml_exists) then
+            ! Initialize with current values
+            n_agents = this % n_agents
+            n_steps = this % n_steps
+            seed = this % seed
+            write_every = this % write_every
+            init_cash = this % init_cash
+            hub_fraction = this % hub_fraction
+            hub_connectivity = this % hub_connectivity
+            regular_connectivity = this % regular_connectivity
+            wealth_bias_strength = this % wealth_bias_strength
+
+            open (unit=10, file='in.nml', status='old', action='read')
+            read (10, nml=run)
+            close (10)
+
+            ! Update object with read values
+            this % n_agents = n_agents
+            this % n_steps = n_steps
+            this % seed = seed
+            this % write_every = write_every
+            this % init_cash = init_cash
+            this % hub_fraction = hub_fraction
+            this % hub_connectivity = hub_connectivity
+            this % regular_connectivity = regular_connectivity
+            this % wealth_bias_strength = wealth_bias_strength
+        end if
+    end subroutine read_nml_bm_class_split
 
 end module config_m

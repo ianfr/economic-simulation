@@ -129,3 +129,60 @@ Metrics tracked:
 - `gini_wealth`: Gini coefficient for wealth distribution
 - `price`: Current market price θ_t
 
+## BMClassSplit
+
+Based on Bouchaud-Mézard model with class heterogeneity - references (1) Fig. 7 and (3) in [README.md](README.md). This model implements a **non-conservative** wealth exchange system on a heterogeneous network designed to produce split Boltzmann-Pareto distributions observed in real income data.
+
+Key features:
+- **Two agent classes**: "Hub" agents (highly connected) and "regular" agents (sparsely connected)
+- **Heterogeneous network structure**: Hubs have ~20 connections, regular agents have ~3 connections
+- **Non-conservative dynamics**: Total wealth is NOT conserved - can grow or shrink over time
+- **Multiplicative exchanges**: Wealth flows proportional to agent wealth (richer agents exchange larger amounts)
+- **Stochastic returns**: Gaussian noise creates/destroys wealth randomly (η_i term)
+- **Wealth-dependent transaction rates**: Flow rates biased toward richer agents
+- **Preferential attachment**: Agents preferentially connect to hubs, creating realistic network topology
+- **Mixed distribution outcome**: Lower wealth follows log-normal (Boltzmann), upper wealth follows power-law (Pareto)
+
+The model reproduces the empirically observed split distribution where:
+- The bulk of the population (regular agents) exhibits exponential/Boltzmann wealth distribution
+- A small elite (hub agents) exhibits power-law/Pareto wealth distribution
+- The transition creates the characteristic "kink" seen in real income data
+
+Exchange mechanism (based on Eq. 22 from Ref. 3):
+```
+dw_i/dt = η_i(t)w_i(t) + Σ(J_ij w_j(t)) - Σ(J_ji w_i(t))
+```
+Where:
+1. Each agent i randomly selects one network neighbor j per timestep
+2. **Stochastic return**: η_i is a Gaussian random variable that multiplies agent i's wealth (creates/destroys wealth)
+3. **Income flow**: Agent i receives J_ij * w_j from neighbor j (proportional to j's wealth)
+4. **Expense flow**: Agent i sends J_ji * w_i to neighbor j (proportional to i's wealth)
+5. **Transaction rates J_ij**: Base rate modulated by wealth bias - richer agents have higher inflow rates
+6. Network topology constrains exchange partners, with hubs participating in more exchanges
+7. **No conservation**: The sum of (η_i w_i) across all agents is non-zero, allowing total wealth to fluctuate
+
+Configuration parameters:
+- `n_agents`: Number of agents in the simulation (default 10000)
+- `n_steps`: Number of simulation steps (default 100000)
+- `init_cash`: Initial cash/wealth for each agent (default 100.0)
+- `hub_fraction`: Fraction of agents designated as hubs (default 0.05 = 5%)
+- `hub_connectivity`: Average number of connections per hub agent (default 20)
+- `regular_connectivity`: Average number of connections per regular agent (default 3)
+- `wealth_bias_strength`: Strength of wealth-dependent exchange bias, β parameter (default 0.5)
+  - 0.0 = no bias (symmetric exchange like SimpleExchange)
+  - 0.5 = moderate bias (realistic regime)
+  - 1.0 = strong bias (extreme inequality)
+- `seed`: Random seed for reproducibility (default 0)
+- `write_every`: Frequency of CSV output (every N steps, default 1000)
+
+Metrics tracked:
+- `gini_coefficient`: Gini coefficient measuring overall wealth inequality
+- `hub_wealth_fraction`: Fraction of total wealth held by hub agents
+
+Notes:
+- Network is initialized once at start (static topology)
+- Preferential connection to hubs creates scale-free-like structure
+- Hub agents naturally accumulate more wealth due to higher connectivity and wealth bias
+- Resulting distribution should show characteristic split with crossover around 70-80th percentile
+- For best results reproducing Fig. 7 from Ref. (1), use: `hub_fraction=0.05, wealth_bias_strength=0.5, n_steps>100000`
+

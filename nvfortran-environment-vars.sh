@@ -9,7 +9,7 @@ fi
 export FPM_FC=/opt/nvidia/hpc_sdk/${NVIDIA_ARCH}/25.5/compilers/bin/nvfortran
 
 # See https://forums.developer.nvidia.com/t/nvfortran-c-preprocessor-bug/292217
-export FPM_FFLAGS="-O2 -Minline -Mpreprocess -Wall -Werror -Wextra -Minfo=all"
+export FPM_FFLAGS="-O2 -Minline -Mpreprocess -Wall -Werror -Wextra -Minfo=all -mp"
 
 # MPI configuration
 export OMPI_FC=$FPM_FC
@@ -26,6 +26,6 @@ if [ "$1" = "MPI" ]; then
 else
     # Choose GPU vs CPU std paralellism
     # Note: NVIDIA Fortran compiler with GPU acceleration (-stdpar=gpu) doesn't support type-bound procedures on the device (GPU) 
-    export FPM_FFLAGS="$FPM_FFLAGS -stdpar=gpu" # GPU
-    # export FPM_FFLAGS="$FPM_FFLAGS -stdpar=multicore" # CPU
+    # export FPM_FFLAGS="$FPM_FFLAGS -stdpar=gpu" # GPU
+    export FPM_FFLAGS="$FPM_FFLAGS -stdpar=multicore" # CPU
 fi

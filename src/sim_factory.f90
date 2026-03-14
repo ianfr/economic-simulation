@@ -1,11 +1,11 @@
-!  /$$$$$$$            /$$   /$$                                                                                  /$$                    
-! | $$__  $$          | $$  | $$                                                                                 |__/                    
+!  /$$$$$$$            /$$   /$$                                                                                  /$$
+! | $$__  $$          | $$  | $$                                                                                 |__/
 ! | $$  \ $$  /$$$$$$ | $$ /$$$$$$  /$$$$$$$$ /$$$$$$/$$$$   /$$$$$$  /$$$$$$$  /$$$$$$$   /$$$$$$  /$$$$$$/$$$$  /$$  /$$$$$$$  /$$$$$$$
 ! | $$$$$$$  /$$__  $$| $$|_  $$_/ |____ /$$/| $$_  $$_  $$ |____  $$| $$__  $$| $$__  $$ /$$__  $$| $$_  $$_  $$| $$ /$$_____/ /$$_____/
-! | $$__  $$| $$  \ $$| $$  | $$      /$$$$/ | $$ \ $$ \ $$  /$$$$$$$| $$  \ $$| $$  \ $$| $$  \ $$| $$ \ $$ \ $$| $$| $$      |  $$$$$$ 
+! | $$__  $$| $$  \ $$| $$  | $$      /$$$$/ | $$ \ $$ \ $$  /$$$$$$$| $$  \ $$| $$  \ $$| $$  \ $$| $$ \ $$ \ $$| $$| $$      |  $$$$$$
 ! | $$  \ $$| $$  | $$| $$  | $$ /$$ /$$__/  | $$ | $$ | $$ /$$__  $$| $$  | $$| $$  | $$| $$  | $$| $$ | $$ | $$| $$| $$       \____  $$
 ! | $$$$$$$/|  $$$$$$/| $$  |  $$$$//$$$$$$$$| $$ | $$ | $$|  $$$$$$$| $$  | $$| $$  | $$|  $$$$$$/| $$ | $$ | $$| $$|  $$$$$$$ /$$$$$$$/
-! |_______/  \______/ |__/   \___/ |________/|__/ |__/ |__/ \_______/|__/  |__/|__/  |__/ \______/ |__/ |__/ |__/|__/ \_______/|_______/ 
+! |_______/  \______/ |__/   \___/ |________/|__/ |__/ |__/ \_______/|__/  |__/|__/  |__/ \______/ |__/ |__/ |__/|__/ \_______/|_______/
 
 ! This module provides a factory for creating simulator instances at runtime based on configuration files
 
@@ -16,6 +16,7 @@ module sim_factory_m
     use model_ccm_exchange_m
     use model_conservative_exchange_market_m
     use model_stochastic_preferences_m
+    use model_co_simple_exchange_m
     implicit none
 
 contains
@@ -45,6 +46,8 @@ contains
             allocate (sim, source=ConservativeExchangeMarket())
         case ('StochasticPreferences')
             allocate (sim, source=StochasticPreferences())
+        case ('CoSimpleExchange') ! Coarray-accelerated
+            allocate (sim, source=CoSimpleExchange())
         case default
             error stop 'Unknown simulation type: '//trim(sim_type)
         end select

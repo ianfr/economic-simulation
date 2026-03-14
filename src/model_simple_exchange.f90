@@ -1,11 +1,11 @@
-!  /$$$$$$$            /$$   /$$                                                                                  /$$                    
-! | $$__  $$          | $$  | $$                                                                                 |__/                    
+!  /$$$$$$$            /$$   /$$                                                                                  /$$
+! | $$__  $$          | $$  | $$                                                                                 |__/
 ! | $$  \ $$  /$$$$$$ | $$ /$$$$$$  /$$$$$$$$ /$$$$$$/$$$$   /$$$$$$  /$$$$$$$  /$$$$$$$   /$$$$$$  /$$$$$$/$$$$  /$$  /$$$$$$$  /$$$$$$$
 ! | $$$$$$$  /$$__  $$| $$|_  $$_/ |____ /$$/| $$_  $$_  $$ |____  $$| $$__  $$| $$__  $$ /$$__  $$| $$_  $$_  $$| $$ /$$_____/ /$$_____/
-! | $$__  $$| $$  \ $$| $$  | $$      /$$$$/ | $$ \ $$ \ $$  /$$$$$$$| $$  \ $$| $$  \ $$| $$  \ $$| $$ \ $$ \ $$| $$| $$      |  $$$$$$ 
+! | $$__  $$| $$  \ $$| $$  | $$      /$$$$/ | $$ \ $$ \ $$  /$$$$$$$| $$  \ $$| $$  \ $$| $$  \ $$| $$ \ $$ \ $$| $$| $$      |  $$$$$$
 ! | $$  \ $$| $$  | $$| $$  | $$ /$$ /$$__/  | $$ | $$ | $$ /$$__  $$| $$  | $$| $$  | $$| $$  | $$| $$ | $$ | $$| $$| $$       \____  $$
 ! | $$$$$$$/|  $$$$$$/| $$  |  $$$$//$$$$$$$$| $$ | $$ | $$|  $$$$$$$| $$  | $$| $$  | $$|  $$$$$$/| $$ | $$ | $$| $$|  $$$$$$$ /$$$$$$$/
-! |_______/  \______/ |__/   \___/ |________/|__/ |__/ |__/ \_______/|__/  |__/|__/  |__/ \______/ |__/ |__/ |__/|__/ \_______/|_______/ 
+! |_______/  \______/ |__/   \___/ |________/|__/ |__/ |__/ \_______/|__/  |__/|__/  |__/ \______/ |__/ |__/ |__/|__/ \_______/|_______/
 
 !===============================================================
 ! simple_exchange.f90
@@ -57,7 +57,7 @@ contains
         type is (Config_SimpleExchange)
             call init_rng(cfg % seed)
             allocate (this % pop(cfg % n_agents))
-            do i=1, cfg % n_agents
+            do i = 1, cfg % n_agents
                 this % pop(i) % cash = cfg % init_cash
             end do
             this % n_steps = cfg % n_steps
@@ -87,15 +87,15 @@ contains
         perm = [(i, i=1, size(this % pop))]
         call shuffle_int(perm)
 
-#ifdef BOLTZ_USE_MPI
+#if defined(BOLTZ_USE_MPI)
         ! Get MPI information
         call MPI_Comm_rank(MPI_COMM_WORLD, rank, ierr)
         call MPI_Comm_size(MPI_COMM_WORLD, nprocs, ierr)
-        
+
         ! Distribute pairs across processes
         p_begin = rank * n_pairs / nprocs + 1
         p_end = (rank + 1) * n_pairs / nprocs
-        
+
         ! Each process works on its separate subset of pairs
         do p = p_begin, p_end
             i = perm(2 * p - 1); j = perm(2 * p)
@@ -105,9 +105,26 @@ contains
                 this % pop(j) % cash = this % pop(j) % cash + this % exchange_delta
             end if
         end do
+#elif defined(BOLTZ_MACOS)
+
+        print*, "Step taken with BOLTZ_MACOS enabled"
+        !$omp parallel do
+        do p = 1, n_pairs
+            i = perm(2 * p - 1); j = perm(2 * p)
+            ! Check if agent i can afford the transaction (cash >= debt_limit + exchange_delta)
+            if (this % pop(i) % cash >= -this % debt_limit + this % exchange_delta) then
+                this % pop(i) % cash = this % pop(i) % cash - this % exchange_delta
+                this % pop(j) % cash = this % pop(j) % cash + this % exchange_delta
+            end if
+        end do
+        !$omp end parallel do
 #else
+#ifndef BOLTZ_USE_COARRAY
         ! optional std parallelism
         do concurrent(p=1:n_pairs)
+#else
+        do p = 1, n_pairs
+#endif
             i = perm(2 * p - 1); j = perm(2 * p)
             ! Check if agent i can afford the transaction (cash >= debt_limit + exchange_delta)
             if (this % pop(i) % cash >= -this % debt_limit + this % exchange_delta) then

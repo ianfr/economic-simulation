@@ -1,11 +1,11 @@
-!  /$$$$$$$            /$$   /$$                                                                                  /$$                    
-! | $$__  $$          | $$  | $$                                                                                 |__/                    
+!  /$$$$$$$            /$$   /$$                                                                                  /$$
+! | $$__  $$          | $$  | $$                                                                                 |__/
 ! | $$  \ $$  /$$$$$$ | $$ /$$$$$$  /$$$$$$$$ /$$$$$$/$$$$   /$$$$$$  /$$$$$$$  /$$$$$$$   /$$$$$$  /$$$$$$/$$$$  /$$  /$$$$$$$  /$$$$$$$
 ! | $$$$$$$  /$$__  $$| $$|_  $$_/ |____ /$$/| $$_  $$_  $$ |____  $$| $$__  $$| $$__  $$ /$$__  $$| $$_  $$_  $$| $$ /$$_____/ /$$_____/
-! | $$__  $$| $$  \ $$| $$  | $$      /$$$$/ | $$ \ $$ \ $$  /$$$$$$$| $$  \ $$| $$  \ $$| $$  \ $$| $$ \ $$ \ $$| $$| $$      |  $$$$$$ 
+! | $$__  $$| $$  \ $$| $$  | $$      /$$$$/ | $$ \ $$ \ $$  /$$$$$$$| $$  \ $$| $$  \ $$| $$  \ $$| $$ \ $$ \ $$| $$| $$      |  $$$$$$
 ! | $$  \ $$| $$  | $$| $$  | $$ /$$ /$$__/  | $$ | $$ | $$ /$$__  $$| $$  | $$| $$  | $$| $$  | $$| $$ | $$ | $$| $$| $$       \____  $$
 ! | $$$$$$$/|  $$$$$$/| $$  |  $$$$//$$$$$$$$| $$ | $$ | $$|  $$$$$$$| $$  | $$| $$  | $$|  $$$$$$/| $$ | $$ | $$| $$|  $$$$$$$ /$$$$$$$/
-! |_______/  \______/ |__/   \___/ |________/|__/ |__/ |__/ \_______/|__/  |__/|__/  |__/ \______/ |__/ |__/ |__/|__/ \_______/|_______/ 
+! |_______/  \______/ |__/   \___/ |________/|__/ |__/ |__/ \_______/|__/  |__/|__/  |__/ \______/ |__/ |__/ |__/|__/ \_______/|_______/
 
 !===============================================================
 ! kinds_config.f90
@@ -101,8 +101,8 @@ module config_m
     type, extends(AbstractConfig) :: Config_StochasticPreferences
         integer(int64) :: n_agents = 1000
         integer(int64) :: n_steps = 10000
-        real(rk)       :: alpha = 0.5_rk           ! Conservation parameter for good A (αN total)
-        real(rk)       :: beta = 0.5_rk            ! Conservation parameter for good B (βN total)
+        real(rk)       :: alpha = 0.5_rk           ! Conservation parameter for good A (alpha*N total)
+        real(rk)       :: beta = 0.5_rk            ! Conservation parameter for good B (beta*N total)
         integer(int64) :: seed = 0
         integer(int64) :: write_every = 1000
     contains
@@ -159,6 +159,8 @@ contains
             allocate (cfg, source=Config_ConservativeExchangeMarket())
         case ('StochasticPreferences')
             allocate (cfg, source=Config_StochasticPreferences())
+        case ('CoSimpleExchange')
+            allocate (cfg, source=Config_SimpleExchange())
         case default
             error stop 'Unknown simulation type: '//trim(sim_type)
         end select

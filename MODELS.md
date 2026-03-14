@@ -20,6 +20,13 @@ Configuration parameters:
 - `seed`: Random seed for reproducibility
 - `write_every`: Frequency of CSV output (every N steps)
 
+## CoSimpleExchange
+
+Same as above, but acts as a demonstration of how to use coarrays with Boltzmannomics. 
+Note that since the exchange model is so simple, the simulation is communication-bound
+so using coarrays is slower than serial execution, but it's a useful reference for future
+development with more complex agents.
+
 ## KineticIsing
 
 Same as `SimpleExchange`, except also:

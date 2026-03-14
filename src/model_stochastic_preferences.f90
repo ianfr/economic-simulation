@@ -1,11 +1,11 @@
-!  /$$$$$$$            /$$   /$$                                                                                  /$$                    
-! | $$__  $$          | $$  | $$                                                                                 |__/                    
+!  /$$$$$$$            /$$   /$$                                                                                  /$$
+! | $$__  $$          | $$  | $$                                                                                 |__/
 ! | $$  \ $$  /$$$$$$ | $$ /$$$$$$  /$$$$$$$$ /$$$$$$/$$$$   /$$$$$$  /$$$$$$$  /$$$$$$$   /$$$$$$  /$$$$$$/$$$$  /$$  /$$$$$$$  /$$$$$$$
 ! | $$$$$$$  /$$__  $$| $$|_  $$_/ |____ /$$/| $$_  $$_  $$ |____  $$| $$__  $$| $$__  $$ /$$__  $$| $$_  $$_  $$| $$ /$$_____/ /$$_____/
-! | $$__  $$| $$  \ $$| $$  | $$      /$$$$/ | $$ \ $$ \ $$  /$$$$$$$| $$  \ $$| $$  \ $$| $$  \ $$| $$ \ $$ \ $$| $$| $$      |  $$$$$$ 
+! | $$__  $$| $$  \ $$| $$  | $$      /$$$$/ | $$ \ $$ \ $$  /$$$$$$$| $$  \ $$| $$  \ $$| $$  \ $$| $$ \ $$ \ $$| $$| $$      |  $$$$$$
 ! | $$  \ $$| $$  | $$| $$  | $$ /$$ /$$__/  | $$ | $$ | $$ /$$__  $$| $$  | $$| $$  | $$| $$  | $$| $$ | $$ | $$| $$| $$       \____  $$
 ! | $$$$$$$/|  $$$$$$/| $$  |  $$$$//$$$$$$$$| $$ | $$ | $$|  $$$$$$$| $$  | $$| $$  | $$|  $$$$$$/| $$ | $$ | $$| $$|  $$$$$$$ /$$$$$$$/
-! |_______/  \______/ |__/   \___/ |________/|__/ |__/ |__/ \_______/|__/  |__/|__/  |__/ \______/ |__/ |__/ |__/|__/ \_______/|_______/ 
+! |_______/  \______/ |__/   \___/ |________/|__/ |__/ |__/ \_______/|__/  |__/|__/  |__/ \______/ |__/ |__/ |__/|__/ \_______/|_______/
 
 !===============================================================
 ! model_stochastic_preferences.f90
@@ -21,14 +21,14 @@ module model_stochastic_preferences_m
     use sim_base_m
     use abm_metrics_m
     implicit none
-    public 
+    public
 
     ! Define the agent privately
     private :: Agent
     type :: Agent
         real(rk) :: good_a = 0.0_rk           ! Holdings of good A
         real(rk) :: good_b = 0.0_rk           ! Holdings of good B
-        real(rk) :: preference = 0.0_rk       ! Stochastic preference f_it ∈ [0,1]
+        real(rk) :: preference = 0.0_rk       ! Stochastic preference f_it in [0,1]
         real(rk) :: wealth = 0.0_rk           ! Total wealth in monetary units
     end type Agent
 
@@ -38,9 +38,9 @@ module model_stochastic_preferences_m
         character(len=32), allocatable :: names(:)  ! Metric names
 
         integer(int64)  :: N_agents = 0         ! Number of agents
-        real(rk)        :: alpha = 1            ! Conservation parameter for good A (αN total)
-        real(rk)        :: beta = 1             ! Conservation parameter for good B (βN total)
-        real(rk)        :: price = 1.0_rk       ! Current market price θ_t
+        real(rk)        :: alpha = 1            ! Conservation parameter for good A (alpha*N total)
+        real(rk)        :: beta = 1             ! Conservation parameter for good B (beta*N total)
+        real(rk)        :: price = 1.0_rk       ! Current market price theta_t
     contains
         ! Override the abstract methods
         procedure :: init
@@ -75,33 +75,33 @@ contains
 
             ! Initialize random number generator
             call init_rng(cfg % seed)
-            
+
             ! Allocate population
             allocate (this % pop(cfg % n_agents))
-            
+
             ! Allocate metric names
             allocate (this % names(4))
             this % names(1) = 'gini_good_a'
             this % names(2) = 'gini_good_b'
             this % names(3) = 'gini_wealth'
             this % names(4) = 'price'
-            
+
             ! Initialize agents with equal holdings and random preferences
             do i = 1, cfg % n_agents
                 this % pop(i) % good_a = this % alpha
                 this % pop(i) % good_b = this % beta
 
-                ! Assign random preference f_it ∈ [0,1]
+                ! Assign random preference f_it in [0,1]
                 call random_number(u)
                 this % pop(i) % preference = u
-                
+
                 ! Initial wealth calculation (price starts at 1.0)
                 this % pop(i) % wealth = this % pop(i) % good_a + this % price * this % pop(i) % good_b
             end do
 
             ! Validate initial market clearing constraints
             call this % validate_market_clearing(1.0e-6_rk)
-            
+
             write (*, '(a,i0)') 'Initialized StochasticPreferences simulation with agents: ', cfg % n_agents
         class default
             error stop 'Unsupported config type in StochasticPreferences init'
@@ -120,7 +120,7 @@ contains
         real, dimension(:), allocatable :: u_list
 
         ! Leverage doing RNG all at once
-        allocate(u_list(size(this % pop)))
+        allocate (u_list(size(this % pop)))
         call random_number(u_list)
 
         ! Step 1: Update stochastic preferences (new random values each period)
@@ -161,34 +161,33 @@ contains
         expected_total_a = this % alpha * real(size(this % pop), rk)
         expected_total_b = this % beta * real(size(this % pop), rk)
 
-
         ! Calculate relative errors
         error_a = abs(total_good_a - expected_total_a) / max(expected_total_a, 1.0e-12_rk)
         error_b = abs(total_good_b - expected_total_b) / max(expected_total_b, 1.0e-12_rk)
 
         ! Check constraints and stop with error if violated
         if (error_a > tolerance) then
-            write(*, '(a)') 'ERROR: Market clearing constraint violated for good A!'
-            write(*, '(a,f0.10)') 'Expected total good A: ', expected_total_a
-            write(*, '(a,f0.10)') 'Actual total good A:   ', total_good_a
-            write(*, '(a,f0.10)') 'Relative error:        ', error_a
-            write(*, '(a,f0.10)') 'Tolerance:             ', tolerance
+            write (*, '(a)') 'ERROR: Market clearing constraint violated for good A!'
+            write (*, '(a,f0.10)') 'Expected total good A: ', expected_total_a
+            write (*, '(a,f0.10)') 'Actual total good A:   ', total_good_a
+            write (*, '(a,f0.10)') 'Relative error:        ', error_a
+            write (*, '(a,f0.10)') 'Tolerance:             ', tolerance
             error stop 'Market clearing constraint violated for good A'
         end if
 
         if (error_b > tolerance) then
-            write(*, '(a)') 'ERROR: Market clearing constraint violated for good B!'
-            write(*, '(a,f0.10)') 'Expected total good B: ', expected_total_b
-            write(*, '(a,f0.10)') 'Actual total good B:   ', total_good_b
-            write(*, '(a,f0.10)') 'Relative error:        ', error_b
-            write(*, '(a,f0.10)') 'Tolerance:             ', tolerance
+            write (*, '(a)') 'ERROR: Market clearing constraint violated for good B!'
+            write (*, '(a,f0.10)') 'Expected total good B: ', expected_total_b
+            write (*, '(a,f0.10)') 'Actual total good B:   ', total_good_b
+            write (*, '(a,f0.10)') 'Relative error:        ', error_b
+            write (*, '(a,f0.10)') 'Tolerance:             ', tolerance
             error stop 'Market clearing constraint violated for good B'
         end if
     end subroutine validate_market_clearing
 
     !------------------------------------------------------------
-    ! Compute market-clearing price θ_t using equation (6) from Silver et al. 2002
-    ! θ_t = Σ(1-f_it)a_(i,t-1) / Σf_it*b_(i,t-1)
+    ! Compute market-clearing price theta_t using equation (6) from Silver et al. 2002
+    ! theta_t = sum((1-f_it)*a_(i,t-1)) / sum(f_it*b_(i,t-1))
     subroutine compute_market_price(this)
         class(StochasticPreferences), intent(inout) :: this
         real(rk) :: numerator, denominator
@@ -228,7 +227,11 @@ contains
 
         ! Update each agent's holdings
         ! do i = 1, size(this % pop)
+#ifndef BOLTZ_USE_COARRAY
         do concurrent(i=1:size(this % pop))
+#else
+        do i = 1, size(this % pop)
+#endif
             old_a = this % pop(i) % good_a
             old_b = this % pop(i) % good_b
             f_it = this % pop(i) % preference
@@ -237,7 +240,7 @@ contains
             this % pop(i) % good_a = (f_it * old_a) + (f_it * old_b * theta_t)
             this % pop(i) % good_b = (1.0 - f_it) * (old_b + old_a * (1.0 / theta_t))
 
-            ! Update wealth using equation (1): w_it = a_it + θ_t * b_it
+            ! Update wealth using equation (1): w_it = a_it + theta_t * b_it
             this % pop(i) % wealth = this % pop(i) % good_a + this % price * this % pop(i) % good_b
         end do
     end subroutine update_agent_allocations
@@ -250,7 +253,7 @@ contains
 
         open (newunit=unit, file=filename, status='replace', action='write', iostat=ios)
         if (ios /= 0) then
-            write(*, '(a,a)') 'Error opening file: ', filename
+            write (*, '(a,a)') 'Error opening file: ', filename
             return
         end if
 
@@ -273,7 +276,7 @@ contains
         class(StochasticPreferences), intent(in) :: this
         real(rk), allocatable :: metrics(:)
 
-        allocate(metrics(4))
+        allocate (metrics(4))
         metrics(1) = this % gini_coefficient_good_a()
         metrics(2) = this % gini_coefficient_good_b()
         metrics(3) = this % gini_coefficient_wealth()
@@ -286,7 +289,7 @@ contains
         character(len=32), allocatable :: result_names(:)
         integer :: i
 
-        allocate(result_names(size(this % names)))
+        allocate (result_names(size(this % names)))
         do i = 1, size(this % names)
             result_names(i) = this % names(i)
         end do
@@ -299,7 +302,7 @@ contains
         real(rk), allocatable :: good_a_list(:)
         integer :: i
 
-        allocate(good_a_list(size(this % pop)))
+        allocate (good_a_list(size(this % pop)))
         do i = 1, size(this % pop)
             good_a_list(i) = this % pop(i) % good_a
         end do
@@ -314,7 +317,7 @@ contains
         real(rk), allocatable :: good_b_list(:)
         integer :: i
 
-        allocate(good_b_list(size(this % pop)))
+        allocate (good_b_list(size(this % pop)))
         do i = 1, size(this % pop)
             good_b_list(i) = this % pop(i) % good_b
         end do
@@ -329,7 +332,7 @@ contains
         real(rk), allocatable :: wealth_list(:)
         integer :: i
 
-        allocate(wealth_list(size(this % pop)))
+        allocate (wealth_list(size(this % pop)))
         do i = 1, size(this % pop)
             wealth_list(i) = this % pop(i) % wealth
         end do

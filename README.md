@@ -25,7 +25,7 @@ Agent-based economic simulation framework leveraging CUDA Fortran and multicore 
 - Implemented in modern Fortran (F2003+ OOP, F95+ dynamic arrays, etc.)
     - Uses the F2008 language feature [`do concurrent`](https://developer.nvidia.com/blog/using-fortran-standard-parallel-programming-for-gpu-acceleration/) and [OpenMP](https://www.openmp.org/wp-content/uploads/OpenMP-4.5-1115-F-web.pdf) for GPU/CPU parallelism
 - Distributed computing support in a cluster environment via:
-    - MPI for very large populations and/or complex agents<sup>1</sup>
+    - MPI or [coarrays](https://en.wikipedia.org/wiki/Coarray_Fortran#Examples) for very large populations and/or complex agents<sup>1</sup>
     - [Cluster Workload Manager](https://github.com/ianfr/cluster-workload-manager) or Slurm for parallelized studies
 - Simplified build system using [fpm](https://fpm.fortran-lang.org/index.html)
 - Easy for users to build their own custom models with the framework using existing models as a guide
@@ -35,13 +35,16 @@ Agent-based economic simulation framework leveraging CUDA Fortran and multicore 
     - Line plots tracking custom population metrics (Gini coefficient, etc.) over time
 - Available simulation models (see [MODELS.md](MODELS.md) for more details):
     - `SimpleExchange` - Simple random exchange with configurable debt limit
+    - `CoSimpleExchange` - Coarray version of `SimpleExchange`
     - `KineticIsing` - Extension of `SimpleExchange` where agents have buy/sell 'spins'
     - `CCMExchange` - Extension of `SimpleExchange` where agents have individual propsensities to save
     - `ConservativeExchangeMarket` - Proximity-based wealth redistribution model - reference (4)
     - `StochasticPreferences` - Exchange market where agents have stochastic preferences for two goods - reference (5)
-- Builds with `gfortran` 15.1.0+ and `nvfortran`
+- Builds<sup>2</sup> with `gfortran` 15.1+ and `nvfortran 25.5+`
 
-<sup>1</sup> *MPI only implemented for `SimpleExchange` so far to showcase the capability*
+<sup>1</sup> *MPI only implemented for `SimpleExchange` and coarrays for `CoSimpleExchange` so far to showcase the capability*
+
+<sup>2</sup> *Except the `CoSimpleExchange` coarray-accelerated model (see setup notes)*
 
 ## Setup Notes (Local & Cloud)
 
@@ -50,10 +53,14 @@ Agent-based economic simulation framework leveraging CUDA Fortran and multicore 
 The fortran package manager (v0.12.0+) is assumed to be installed at ~/fpm
 
 **Tested compiler configurations**:
-|              | gfortran 15.1.0 | nvfortran 25.5-0 |
-| --- | ---- | ---- |
-| x64 Ubuntu 24.04        | ✅CPU       | 🔵GPU, ✅CPU           | 
-| arm64 Ubuntu 24.04       | ✅CPU       | ❓GPU, ➕CPU                    | 
+
+|                         | gfortran 15 | nvfortran 25.5-0 | opencoarrays 2.10.2 and gfortran 13 |
+| ----                    | ----       | ----              | ---- |
+| x64 Ubuntu 24.04        | ✅CPU       | 🔵GPU, ✅CPU     | ❓  |
+| arm64 Ubuntu 24.04      | ✅CPU       | ❓GPU, ➕CPU     | ❓  |
+| arm64 macOS 26          | ✅CPU       |  ❌              | ❓  |
+| arm64 Debian 13 (spack) |    ❓       |  ❓              | ➕  |
+
 Key:
 - ✅ `do concurrent` and MPI parallelism
 - 🔵 `do concurrent` parallelism
@@ -61,21 +68,30 @@ Key:
 - ❓ Untested configuration
 - ❌ Unsupported configuration
 
-The `nvfortran` is reccomended, however compatibility is maintained with the open-source `gfortran` compiler to be in line with JOSS reccomendations.
-- To get an updated gfortran, create a `conda` environment and run: 
-    - `conda install -c conda-forge gfortran=15.1.0`
+The `nvfortran` compiler is reccomended since it provides GPU acceleration, however compatibility is maintained with the open-source `gfortran` compiler to be in line with JOSS reccomendations.
+- To get an updated gfortran (15.2 at time of writing), create a `conda` environment and run: 
+    - `conda install -c conda-forge gfortran`
     - `conda config --add channels conda-forge`
     - `conda config --set channel_priority strict`
-    - `conda install openmpi openmpi-mpifort`
+    - `conda install openmpi openmpi-mpifort gcc gxx`
 
 Compilation notes:
 - To build with CPU std parallelism instead of GPU with `nvfortran`, swap the commented out lines in nvfortran-environment-vars.sh
 - To build with `gfortran` with CPU std parallelism, use `source gfortran-environment-vars.sh && ~/fpm build`
     - Set the number of cores used with GFORT_N_CORES in gfortran-environment-vars.sh
-    - Set the gfortran 15.1+ compiler path in gfortran-environment-vars.sh
+    - Assign the gfortran 15 conda environment path to `GFORT_CONDA_ENV` before sourcing
 - View `nvfortran` optimization printouts: `source nvfortran-environment-vars.sh && ~/fpm clean && rm -f compile.txt && ~/fpm build --verbose &> compile.txt`
+- Notes for **macOS**: 
+    - The C++ compiler namings being a little strange on macOS causes FPM to fail even when explicitly setting FPM_CC/CXX, so you have to source the gfortran conda environment in order to build
+    - Using Ubuntu Multipass is another option that will let you use the ARM version of the nvidia compiler for CPU parallelism. Beware of slower disk performance when mounting folders with `--classic`.
 
 (Optional) for a better development experience use the Modern Fortran VS Code extension. On the main development machine the fortran language server is located in a conda env here: /home/linuxuser/miniconda3/envs/fortran-fortls along with fprettify for code formatting.
+
+**Python with Conda**
+
+It is reccomended to create a Python environment for post-processing either with venv/pip using the included _python-3.12.11-requirements.txt_, or with conda by adding to the gfortran environment created above with the following command:
+
+`conda install python==3.12.11 joblib matplotlib numpy pandas scipy seaborn`
 
 **Using MPI**
 
@@ -86,8 +102,19 @@ Building with MPI:
 Running with MPI on a single host with 4 cores: 
 `rm out/*; $MPIRUN -n 4 ~/fpm run` 
 
-Running with MPI on a cluster of nodes with 4 cores: 
-**TODO** - this will be its own tutorial in DISTRIBUTED.md once I run on my arm64 MPI cluster
+Running with MPI on a cluster of nodes with 4 cores: see DISTRIBUTED.md, which is based on my own experience
+running this on a Raspberry Pi 5 cluster.
+
+**Using Coarrays**
+
+Right now, there is only one model that uses coarrays: `CoSimpleExchange`.
+
+Building this has been tested from a Debian 13 VM running on top of macOS.
+GCC 13 was installed via `apt` and then [spack](https://spack-tutorial.readthedocs.io/en/latest/tutorial_basics.html) was used to install [opencoarrays](https://github.com/sourceryinstitute/opencoarrays).
+
+Source spack-environment-vars.sh to build Boltzmannomics with coarray support (note that this will cause everything but coarray-accelerated models to run in serial).
+
+When writing coarray Fortran models, it's important to analyze the code for communication bottlenecks and performance issues. This can be done with the excellent [score-p](https://scorepci.pages.jsc.fz-juelich.de/scorep-pipelines/docs/scorep-4.1/html/index.html) and [scalasca](https://www.scalasca.org/) tooling. See scalasca-environment-vars.sh for details on how I analyzed the performance of `CoSimpleExchange`.
 
 ### Cloud Setup: Run in the Cloud on AWS EC2 with Terraform
 
@@ -128,7 +155,7 @@ Note that the `--gpus all` option does no harm if the EC2 machine has no GPU and
 ### Build & Run
 From top-level of the repo:
 - Copy a pair of .nml files from the templates folder into the top-level directory
-- Build: `source nvfortran-environment-vars.sh && ~/fpm build`
+- Build with e.g.: `source nvfortran-environment-vars.sh && ~/fpm build`
 - Run: `rm out/*; ~/fpm run`
 
 ### Post-process the results

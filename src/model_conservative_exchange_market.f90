@@ -1,11 +1,11 @@
-!  /$$$$$$$            /$$   /$$                                                                                  /$$                    
-! | $$__  $$          | $$  | $$                                                                                 |__/                    
+!  /$$$$$$$            /$$   /$$                                                                                  /$$
+! | $$__  $$          | $$  | $$                                                                                 |__/
 ! | $$  \ $$  /$$$$$$ | $$ /$$$$$$  /$$$$$$$$ /$$$$$$/$$$$   /$$$$$$  /$$$$$$$  /$$$$$$$   /$$$$$$  /$$$$$$/$$$$  /$$  /$$$$$$$  /$$$$$$$
 ! | $$$$$$$  /$$__  $$| $$|_  $$_/ |____ /$$/| $$_  $$_  $$ |____  $$| $$__  $$| $$__  $$ /$$__  $$| $$_  $$_  $$| $$ /$$_____/ /$$_____/
-! | $$__  $$| $$  \ $$| $$  | $$      /$$$$/ | $$ \ $$ \ $$  /$$$$$$$| $$  \ $$| $$  \ $$| $$  \ $$| $$ \ $$ \ $$| $$| $$      |  $$$$$$ 
+! | $$__  $$| $$  \ $$| $$  | $$      /$$$$/ | $$ \ $$ \ $$  /$$$$$$$| $$  \ $$| $$  \ $$| $$  \ $$| $$ \ $$ \ $$| $$| $$      |  $$$$$$
 ! | $$  \ $$| $$  | $$| $$  | $$ /$$ /$$__/  | $$ | $$ | $$ /$$__  $$| $$  | $$| $$  | $$| $$  | $$| $$ | $$ | $$| $$| $$       \____  $$
 ! | $$$$$$$/|  $$$$$$/| $$  |  $$$$//$$$$$$$$| $$ | $$ | $$|  $$$$$$$| $$  | $$| $$  | $$|  $$$$$$/| $$ | $$ | $$| $$|  $$$$$$$ /$$$$$$$/
-! |_______/  \______/ |__/   \___/ |________/|__/ |__/ |__/ \_______/|__/  |__/|__/  |__/ \______/ |__/ |__/ |__/|__/ \_______/|_______/ 
+! |_______/  \______/ |__/   \___/ |________/|__/ |__/ |__/ \_______/|__/  |__/|__/  |__/ \______/ |__/ |__/ |__/|__/ \_______/|_______/
 
 !===============================================================
 ! conservative_exchange_market.f90
@@ -17,7 +17,7 @@
 ! Ref (4)
 
 ! -------------------------------------------------------------------------------------------------------------------
-! Notes: 
+! Notes:
 !       The lattice here is static, and only used during initialization
 !       The lattice is also not completely full (on purpose), and this degree of filling is an input
 !       Periodic BCs
@@ -33,7 +33,6 @@
 !       environment of each agent does not change with time and also where the commercial
 !       links are symmetric." (4)
 ! -------------------------------------------------------------------------------------------------------------------
-
 
 module model_conservative_exchange_market_m
     use kinds_m
@@ -142,10 +141,10 @@ contains
                 if (trial_wealth < this % rewiring_probability) then
                     ! Find a new neighbor that is not self and not already a neighbor
                     do
-                    tmp_neigh_idx = random_int(1, size(this % pop))
-                    if (tmp_neigh_idx /= i .and. .not. any(this % pop(i) % neighbors == tmp_neigh_idx)) then
-                        exit
-                    end if
+                        tmp_neigh_idx = random_int(1, size(this % pop))
+                        if (tmp_neigh_idx /= i .and. .not. any(this % pop(i) % neighbors == tmp_neigh_idx)) then
+                            exit
+                        end if
                     end do
                     this % pop(i) % neighbors(j) = tmp_neigh_idx
                 end if
@@ -160,7 +159,7 @@ contains
         class(ConservativeExchangeMarket), intent(inout) :: this
         integer :: i, poorest_idx, neigh_idx
         real(rk) lowest_wealth, transfer_amount, amount_per_neighbor
-        
+
         ! Find the poorest agent
         lowest_wealth = 1e20
         poorest_idx = 1

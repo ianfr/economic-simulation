@@ -1,11 +1,11 @@
-!  /$$$$$$$            /$$   /$$                                                                                  /$$                    
-! | $$__  $$          | $$  | $$                                                                                 |__/                    
+!  /$$$$$$$            /$$   /$$                                                                                  /$$
+! | $$__  $$          | $$  | $$                                                                                 |__/
 ! | $$  \ $$  /$$$$$$ | $$ /$$$$$$  /$$$$$$$$ /$$$$$$/$$$$   /$$$$$$  /$$$$$$$  /$$$$$$$   /$$$$$$  /$$$$$$/$$$$  /$$  /$$$$$$$  /$$$$$$$
 ! | $$$$$$$  /$$__  $$| $$|_  $$_/ |____ /$$/| $$_  $$_  $$ |____  $$| $$__  $$| $$__  $$ /$$__  $$| $$_  $$_  $$| $$ /$$_____/ /$$_____/
-! | $$__  $$| $$  \ $$| $$  | $$      /$$$$/ | $$ \ $$ \ $$  /$$$$$$$| $$  \ $$| $$  \ $$| $$  \ $$| $$ \ $$ \ $$| $$| $$      |  $$$$$$ 
+! | $$__  $$| $$  \ $$| $$  | $$      /$$$$/ | $$ \ $$ \ $$  /$$$$$$$| $$  \ $$| $$  \ $$| $$  \ $$| $$ \ $$ \ $$| $$| $$      |  $$$$$$
 ! | $$  \ $$| $$  | $$| $$  | $$ /$$ /$$__/  | $$ | $$ | $$ /$$__  $$| $$  | $$| $$  | $$| $$  | $$| $$ | $$ | $$| $$| $$       \____  $$
 ! | $$$$$$$/|  $$$$$$/| $$  |  $$$$//$$$$$$$$| $$ | $$ | $$|  $$$$$$$| $$  | $$| $$  | $$|  $$$$$$/| $$ | $$ | $$| $$|  $$$$$$$ /$$$$$$$/
-! |_______/  \______/ |__/   \___/ |________/|__/ |__/ |__/ \_______/|__/  |__/|__/  |__/ \______/ |__/ |__/ |__/|__/ \_______/|_______/ 
+! |_______/  \______/ |__/   \___/ |________/|__/ |__/ |__/ \_______/|__/  |__/|__/  |__/ \______/ |__/ |__/ |__/|__/ \_______/|_______/
 
 !===============================================================
 ! model_ccm_exchange.f90
@@ -19,6 +19,7 @@ module model_ccm_exchange_m
     use sim_base_m
     use abm_metrics_m
     ! use h5fortran
+    
     implicit none
     public ! public by default, Agent below is private
 
@@ -70,6 +71,15 @@ contains
 
             allocate (this % names(1))
             this % names(1) = 'gini_coefficient'
+
+            ! Instantiate the parallel RNG
+            call this%rng%set_seed((/89732_int64, 1892342989_int64/)) ! TODO update
+#ifdef _OPENMP
+            call this%prng%init_parallel(omp_get_max_threads(), this%rng)
+#else
+            call this%prng%init_parallel(1, this%rng)
+#endif
+
         class default
             error stop 'Unsupported config type in CCMExchange init'
         end select
@@ -88,26 +98,30 @@ contains
         real(rk) :: exchange_result(2)
         real(rk) :: exchange_matrix(2, 2)
         real(rk), allocatable :: eps(:)
+        integer               :: n, tid ! for parallel RNG
+        TYPE(RNG_T) rng_local
 
         ! Generate the random set of pairs of agents
+        print*, "Generating pairs..."
         n_pairs = size(this % pop) / 2
         allocate (perm(size(this % pop)))
         perm = [(i, i=1, size(this % pop))]
         call shuffle_int(perm)
+        print*, "...done generating pairs"
 
         ! Generate the eps values for each pair randomly
+        print*, "Generating random eps values..."
         allocate (eps(n_pairs))
-        call random_number(eps)
+        ! call random_number(eps)
+        call parallel_random_number(n_pairs, eps, this%rng, this%prng)
+        print*, "...done generating random values."
 
-        ! NOT NEEDED WITH THE GFORTRAN 15.1 UPDATE
-        ! For now, run serially with gfortran since it doesn't support `do concurrent` locality yet
-        ! https://fortran-lang.discourse.group/t/do-concurrent-can-loop-variable-be-specified-in-local/8396/2
-        ! https://gcc.gnu.org/bugzilla/show_bug.cgi?id=101602
-! #ifdef __GFORTRAN__
-!         do p = 1, n_pairs
-! #else
+        print*, "Starting do concurrent loop for step()..."
+#ifndef BOLTZ_USE_COARRAY
         do concurrent(p=1:n_pairs) local(lambda_i, lambda_j, cash_i, cash_j, exchange_matrix, exchange_result)
-! #endif
+#else
+        do p = 1, n_pairs
+#endif
             i = perm(2 * p - 1)
             j = perm(2 * p)
 
@@ -133,6 +147,7 @@ contains
             end if
 
         end do
+        print*, "...done with do concurrent loop for step()"
     end subroutine step
 
     !------------------------------------------------------------

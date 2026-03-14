@@ -3,7 +3,7 @@ version = "0.1.0"
 license = "GNU General Public License v3.0"
 author = "Ian Friedrichs"
 maintainer = "ianfriedri@outlook.com"
-copyright = "Copyright 2025, Ian Friedrichs"
+copyright = "Copyright 2026, Ian Friedrichs. See LICENSE.txt"
 
 [build]
 auto-executables = true
@@ -23,3 +23,5 @@ test = false
 implicit-typing = false
 implicit-external = false
 source-form = "free"
+
+[dependencies]

@@ -97,6 +97,22 @@ module config_m
         procedure :: read_nml => read_nml_conservative_exchange_market
     end type Config_ConservativeExchangeMarket
 
+    ! Configuration type for CoDiscreteBouchaudMezard simulations
+    ! Based on Di Matteo, Aste, and Hyde (2003) discrete-time Bouchaud-Mezard model
+    type, extends(AbstractConfig) :: Config_CoDiscreteBouchaudMezard
+        integer(int64) :: n_agents = 1000
+        integer(int64) :: n_steps = 10000
+        real(rk)       :: init_wealth = 100.0_rk        ! Initial wealth for each agent
+        real(rk)       :: q0 = 0.1_rk                   ! Fraction of wealth distributed to neighbors
+        real(rk)       :: sigma0 = 5.0_rk               ! Std dev of additive Gaussian noise
+        integer        :: k = 3                          ! Number of nearest neighbors on each side (degree = 2k)
+        real(rk)       :: rewiring_probability = 0.0_rk  ! Probability of rewiring connections (0 = regular lattice)
+        integer(int64) :: seed = 20250314
+        integer(int64) :: write_every = 100
+    contains
+        procedure :: read_nml => read_nml_co_discrete_bouchaud_mezard
+    end type Config_CoDiscreteBouchaudMezard
+
     ! Configuration type for Stochastic Preferences simulations
     type, extends(AbstractConfig) :: Config_StochasticPreferences
         integer(int64) :: n_agents = 1000
@@ -161,6 +177,8 @@ contains
             allocate (cfg, source=Config_StochasticPreferences())
         case ('CoSimpleExchange')
             allocate (cfg, source=Config_SimpleExchange())
+        case ('CoDiscreteBouchaudMezard')
+            allocate (cfg, source=Config_CoDiscreteBouchaudMezard())
         case default
             error stop 'Unknown simulation type: '//trim(sim_type)
         end select
@@ -350,5 +368,48 @@ contains
             this % beta = beta
         end if
     end subroutine read_nml_stochastic_preferences
+
+    ! Read the configuration from 'in.nml' for CoDiscreteBouchaudMezard simulation
+    subroutine read_nml_co_discrete_bouchaud_mezard(this)
+        class(Config_CoDiscreteBouchaudMezard), intent(inout) :: this
+
+        logical :: nml_exists
+        integer(int64) :: n_agents, n_steps, seed, write_every
+        real(rk) :: init_wealth, q0, sigma0, rewiring_probability
+        integer :: k
+
+        namelist /run/ n_agents, n_steps, init_wealth, q0, sigma0, k, &
+                       rewiring_probability, seed, write_every
+
+        inquire (file='in.nml', exist=nml_exists)
+
+        if (nml_exists) then
+            ! Initialize with current values
+            n_agents = this % n_agents
+            n_steps = this % n_steps
+            init_wealth = this % init_wealth
+            q0 = this % q0
+            sigma0 = this % sigma0
+            k = this % k
+            rewiring_probability = this % rewiring_probability
+            seed = this % seed
+            write_every = this % write_every
+
+            open (unit=10, file='in.nml', status='old', action='read')
+            read (10, nml=run)
+            close (10)
+
+            ! Update object with read values
+            this % n_agents = n_agents
+            this % n_steps = n_steps
+            this % init_wealth = init_wealth
+            this % q0 = q0
+            this % sigma0 = sigma0
+            this % k = k
+            this % rewiring_probability = rewiring_probability
+            this % seed = seed
+            this % write_every = write_every
+        end if
+    end subroutine read_nml_co_discrete_bouchaud_mezard
 
 end module config_m

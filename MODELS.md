@@ -102,6 +102,52 @@ Configuration parameters:
 
 Note: Initial wealth is randomly distributed between 0 and 1 for each agent.
 
+## CoDiscreteBouchaudMezard
+
+Based on Di Matteo, Aste, and Hyde (2003), "Exchanges in complex networks: income and wealth distributions". This model implements a discrete-time Bouchaud-Mezard wealth exchange process on a network, accelerated by coarray Fortran.
+
+Unlike CoSimpleExchange (which is communication-bound due to trivial per-agent computation), this model is **compute-bound**: each agent must iterate over all its neighbors to sum weighted wealth contributions every step, making it appropriate for SPMD parallelism via coarrays.
+
+Key features:
+- Agents are connected through a configurable network (1D ring lattice with optional small-world rewiring)
+- Each agent distributes a fraction `q0` of its wealth equally to its neighbors each step
+- Additive Gaussian noise models market/social fluctuations
+- Wealth distribution is shaped by the degree distribution of the underlying network
+- On scale-free networks, the model produces power-law tails in the wealth distribution
+- On homogeneous networks, the wealth distribution decays exponentially
+- The expectation value of each agent's wealth is proportional to its connectivity (Eq. 10 in the paper)
+
+Wealth update equation (Eq. 3 from the paper):
+```
+w_l(t+1) = A_l(t) + (1 - q0) * w_l(t) + sum_{j in I_l} (q0 / z_j) * w_j(t)
+```
+
+Where:
+- `A_l(t)` is additive Gaussian noise with mean 0 and standard deviation `sigma0`
+- `q0` is the fraction of wealth each agent distributes to neighbors
+- `z_j` is the degree (number of neighbors) of agent j
+- `I_l` is the set of neighbors of agent l
+
+Coarray parallelism strategy:
+- Each coimage owns a contiguous slice of agents with their wealth stored in a coarray
+- Each step, every image computes new wealth for its local agents by reading neighbor wealth values from local and remote images via one-sided coarray reads
+- The heavy per-agent neighborhood summation (O(2k) FLOPs per agent) keeps each image compute-busy between sync points, achieving a favorable compute-to-communication ratio
+- Only two `sync all` barriers per step (vs. three in CoSimpleExchange)
+
+Configuration parameters:
+- `n_agents`: Number of agents in the simulation (default 1000)
+- `n_steps`: Number of simulation steps (default 10000)
+- `init_wealth`: Initial wealth for each agent (default 100.0)
+- `q0`: Fraction of wealth distributed to neighbors each step (default 0.1)
+- `sigma0`: Standard deviation of additive Gaussian noise (default 5.0)
+- `k`: Number of nearest neighbors on each side; total degree = 2k (default 3)
+- `rewiring_probability`: Probability of rewiring each connection during initialization (default 0.0 = regular lattice)
+- `seed`: Random seed for reproducibility (default 20250314)
+- `write_every`: Frequency of CSV output (every N steps, default 100)
+
+Metrics tracked:
+- `gini_coefficient`: Gini coefficient of the wealth distribution
+
 ## StochasticPreferences
 
 Based on Silver, Slud, and Takamoto (2002) - reference (5) in [README.md](README.md). This model implements an exchange market where agents have stochastic preferences for two goods and make optimal allocation decisions based on Cobb-Douglas utility functions.

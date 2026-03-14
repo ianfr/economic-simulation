@@ -112,7 +112,7 @@ Right now, there is only one model that uses coarrays: `CoSimpleExchange`.
 Building this has been tested from a Debian 13 VM running on top of macOS.
 GCC 13 was installed via `apt` and then [spack](https://spack-tutorial.readthedocs.io/en/latest/tutorial_basics.html) was used to install [opencoarrays](https://github.com/sourceryinstitute/opencoarrays).
 
-Source spack-environment-vars.sh to build Boltzmannomics with coarray support (note that this will cause everything but coarray-accelerated models to run in serial).
+Source spack-environment-vars.sh to build Boltzmannomics with coarray support (note that this will cause everything but coarray-accelerated models to run in serial). Run with e.g. `cafrun -np 4 fpm run`.
 
 When writing coarray Fortran models, it's important to analyze the code for communication bottlenecks and performance issues. This can be done with the excellent [score-p](https://scorepci.pages.jsc.fz-juelich.de/scorep-pipelines/docs/scorep-4.1/html/index.html) and [scalasca](https://www.scalasca.org/) tooling. See scalasca-environment-vars.sh for details on how I analyzed the performance of `CoSimpleExchange`.
 

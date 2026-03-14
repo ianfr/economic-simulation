@@ -17,6 +17,7 @@ module sim_factory_m
     use model_conservative_exchange_market_m
     use model_stochastic_preferences_m
     use model_co_simple_exchange_m
+    use model_co_discrete_bouchaud_mezard_m
     implicit none
 
 contains
@@ -48,6 +49,8 @@ contains
             allocate (sim, source=StochasticPreferences())
         case ('CoSimpleExchange') ! Coarray-accelerated
             allocate (sim, source=CoSimpleExchange())
+        case ('CoDiscreteBouchaudMezard') ! Coarray-accelerated
+            allocate (sim, source=CoDiscreteBouchaudMezard())
         case default
             error stop 'Unknown simulation type: '//trim(sim_type)
         end select

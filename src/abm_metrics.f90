@@ -52,7 +52,12 @@ contains
         call c_f_pointer(b, bp)
         ! print*, "ap: ", ap
         ! print*, "bp: ", bp
-        result = int(ap - bp, c_int)
+        ! qsort needs the sign of the comparison, including differences < 1.
+        ! Converting the difference to an integer treats fractional wealth as
+        ! equal and can overflow for large values.
+        result = 0_c_int
+        if (ap < bp) result = -1_c_int
+        if (ap > bp) result = 1_c_int
     end function
     ! The actual qsort call to libc's qsort
     subroutine my_qsort_real8(a, nel)
@@ -81,7 +86,8 @@ contains
         ! Use custom qsort for gfortran to avoid issues with type-bound procedures
         call my_qsort_real8(arr, size(arr)) ! custom sort for gfortran
 #else
-        call qsort(arr, size(arr), sizeof(rk), sort_compar_op) ! builtin sort
+        ! Pass the real element width, not the size of the integer kind tag.
+        call qsort(arr, size(arr), storage_size(arr(1)) / 8, sort_compar_op) ! builtin sort
 #endif
     end subroutine sort_real_array
 

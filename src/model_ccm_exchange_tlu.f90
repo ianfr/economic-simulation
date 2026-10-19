@@ -18,10 +18,13 @@
 !      maintains the reward EMA diagnostic).
 !   6. Diagnostics: rejected-trade and mean-absolute-reward aggregates.
 !
-! RNG streams: matchmaking uses the intrinsic RNG (seeded by init_rng,
+! RNG streams: matchmaking uses a per-instance snapshot of the intrinsic
+! RNG (seeded once by init_rng,
 ! exactly as in CCMExchange); exchange epsilons use this%rng/this%prng
 ! (same seeding as CCMExchange, so ccm_fixed trajectories match the
-! reference model); policy initialization and exploration use a separate
+! reference model). Every mode consumes the same reference initialization
+! draws before snapshotting matchmaking state. Binary/TLU policy
+! initialization and exploration use a separate
 ! policy_rng instance derived deterministically from the nonzero seed,
 ! so policy draws never consume the matchmaking/epsilon sequences.
 !===============================================================
@@ -86,6 +89,8 @@ module model_ccm_exchange_tlu_m
         real(rk) :: last_mean_abs_reward = 0.0_rk
         ! Separated RNG stream for policy init/exploration (see header)
         type(RNG_t) :: policy_rng
+        ! Snapshot of the intrinsic matchmaking stream, owned by this model.
+        integer, allocatable :: pairing_state(:)
     contains
         ! Override the abstract methods
         procedure :: init
@@ -159,8 +164,18 @@ contains
         real(rk), intent(in) :: weights(TLU_NFEATURES), x(TLU_NFEATURES)
         real(rk), intent(in) :: temperature
         real(rk) :: p
+        real(rk) :: z
 
-        p = tlu_sigmoid(dot_product(weights, x) / temperature)
+        z = dot_product(weights, x)
+        ! Saturate before division so small positive temperatures cannot
+        ! overflow an argument that would immediately be clipped anyway.
+        if (temperature < 1.0_rk) then
+            if (abs(z) > TLU_SIGMOID_CLIP * temperature) then
+                p = tlu_sigmoid(sign(TLU_SIGMOID_CLIP, z))
+                return
+            end if
+        end if
+        p = tlu_sigmoid(z / temperature)
     end function tlu_action_probability
 
     ! Sample a Bernoulli action: 1 with probability p given uniform u
@@ -200,6 +215,8 @@ contains
         real(rk), intent(in) :: prob, advantage, learning_rate, temperature, weight_clip
         integer :: k
 
+        ! A frozen policy must remain unchanged even outside the clip bounds.
+        if (learning_rate <= 0.0_rk) return
         do k = 1, TLU_NFEATURES
             weights(k) = tlu_clip(weights(k) + learning_rate * advantage * &
                                   (real(action, rk) - prob) * x(k) / temperature, &
@@ -239,7 +256,8 @@ contains
         integer(int64) :: i
         real(rk) :: u, w_init(TLU_NFEATURES)
         real(rk) :: x_init(TLU_NFEATURES), p_init
-        integer :: a_init, k
+        integer :: a_init, k, seed_size
+        integer, allocatable :: ambient_state(:)
 
         select type (cfg)
         type is (Config_CCMExchangeTLU)
@@ -248,6 +266,9 @@ contains
 
             ! Intrinsic-RNG stream: matchmaking + baseline sampling, exactly
             ! as in CCMExchange so ccm_fixed reproduces the reference model.
+            call random_seed(size=seed_size)
+            allocate (ambient_state(seed_size), this % pairing_state(seed_size))
+            call random_seed(get=ambient_state)
             call init_rng(cfg % seed)
             allocate (this % pop(cfg % n_agents))
 
@@ -314,12 +335,14 @@ contains
             end do
 
             ! Second pass: initial saving propensity / action per policy.
-            ! ccm_fixed samples exactly like CCMExchange (one intrinsic
-            ! uniform per agent in agent order).
+            ! All modes reserve the CCM reference initialization uniforms;
+            ! only ccm_fixed uses them as continuous saving propensities.
             do i = 1, cfg % n_agents
+                ! Consume the reference CCM initialization draw in every mode
+                ! so all policies start matchmaking at the same stream state.
+                call random_number(u)
                 select case (trim(this % policy_mode))
                 case ('ccm_fixed')
-                    call random_number(u)
                     this % pop(i) % saving_propensity = &
                         u * (cfg % max_saving_propensity - cfg % min_saving_propensity) + &
                         cfg % min_saving_propensity
@@ -328,7 +351,7 @@ contains
                     this % pop(i) % last_action = -1
                     this % pop(i) % last_policy_probability = -1.0_rk
                 case ('binary_fixed')
-                    call random_number(u)
+                    u = this % policy_rng % unif_01()
                     if (u < 0.5_rk) then
                         a_init = 1
                     else
@@ -370,6 +393,8 @@ contains
                         this % lambda_low + real(a_init, rk) * (this % lambda_high - this % lambda_low)
                 end select
             end do
+            call random_seed(get=this % pairing_state)
+            call random_seed(put=ambient_state)
 
             allocate (this % names(9))
             this % names(1) = 'gini_coefficient'
@@ -393,7 +418,7 @@ contains
     subroutine step(this)
         class(CCMExchangeTLU), intent(inout) :: this
         integer :: n, n_pairs, p, i, j, k
-        integer, allocatable :: perm(:)
+        integer, allocatable :: perm(:), ambient_state(:)
         real(rk), allocatable :: eps(:), policy_u(:)
         real(rk) :: x_i(TLU_NFEATURES), x_j(TLU_NFEATURES)
         real(rk) :: m_i, m_j, lambda_i, lambda_j, b_i, b_j
@@ -411,7 +436,12 @@ contains
         ! 1. Pairing (same Fisher-Yates shuffle as CCMExchange)
         allocate (perm(n))
         perm = [(k, k=1, n)]
+        allocate (ambient_state(size(this % pairing_state)))
+        call random_seed(get=ambient_state)
+        call random_seed(put=this % pairing_state)
         call shuffle_int(perm)
+        call random_seed(get=this % pairing_state)
+        call random_seed(put=ambient_state)
 
         ! 2. Randomness up front: epsilons on the exchange stream and,
         ! only for stochastic policies, policy uniforms on the separate
@@ -588,8 +618,7 @@ contains
 
         ! Write agent data
         do i = 1, size(this % pop)
-            write (unit, '(i0,",",es23.15,",",es23.15,",",i0,",",es23.15,",",es23.15,'// &
-                '",",es23.15,",",es23.15,",",es23.15,",",es23.15,",",es23.15)') &
+            write (unit, '(i0,",",es26.17e3,",",es26.17e3,",",i0,7(",",es26.17e3))') &
                 i, this % pop(i) % cash, this % pop(i) % saving_propensity, &
                 this % pop(i) % last_action, this % pop(i) % last_policy_probability, &
                 this % pop(i) % last_reward, this % pop(i) % reward_ema, &

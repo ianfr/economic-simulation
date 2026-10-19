@@ -2,6 +2,7 @@ mods/*.o
 mods/*.mod
 
 *.nml
+!templates/CCMExchangeTLU/*.nml
 
 out/*.csv
 

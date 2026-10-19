@@ -415,6 +415,16 @@ contains
         character(len=:), allocatable :: errmsg
 
         errmsg = ''
+        ! Check finiteness before comparisons (NaNs can otherwise pass range
+        ! checks, or trap before a useful diagnostic is returned).
+        if (.not. all(ieee_is_finite([this % init_cash, this % debt_limit, &
+            this % exchange_delta, this % min_saving_propensity, this % max_saving_propensity, &
+            this % lambda_low, this % lambda_high, this % learning_rate, &
+            this % policy_temperature, this % weight_init_scale, this % weight_clip, &
+            this % reward_clip, this % memory_decay]))) then
+            errmsg = 'CCMExchangeTLU: all real-valued parameters must be finite'
+            return
+        end if
         if (this % n_agents < 2) then
             errmsg = 'CCMExchangeTLU: n_agents must be >= 2'
             return

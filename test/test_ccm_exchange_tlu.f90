@@ -10,11 +10,36 @@ program test_ccm_exchange_tlu
     use sim_factory_m
     use model_ccm_exchange_m
     use model_ccm_exchange_tlu_m
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan, ieee_positive_inf
+    use, intrinsic :: iso_c_binding, only: c_char, c_int, c_size_t, c_ptr, c_associated, c_null_char
     implicit none
 
     integer :: n_fail = 0
     integer :: n_pass = 0
+
+    interface
+        function c_getcwd(path, length) bind(c, name='getcwd') result(ptr)
+            import c_char, c_size_t, c_ptr
+            character(c_char), intent(out) :: path(*)
+            integer(c_size_t), value :: length
+            type(c_ptr) :: ptr
+        end function
+        function mkdtemp(path) bind(c) result(ptr)
+            import c_char, c_ptr
+            character(c_char), intent(inout) :: path(*)
+            type(c_ptr) :: ptr
+        end function
+        function c_chdir(path) bind(c, name='chdir') result(status)
+            import c_char, c_int
+            character(c_char), intent(in) :: path(*)
+            integer(c_int) :: status
+        end function
+        function rmdir(path) bind(c) result(status)
+            import c_char, c_int
+            character(c_char), intent(in) :: path(*)
+            integer(c_int) :: status
+        end function
+    end interface
 
     call test_pure_policy()
     call test_learning_arithmetic()
@@ -25,7 +50,9 @@ program test_ccm_exchange_tlu
     call test_conservation_and_bounds()
     call test_no_lookahead_and_learning_context()
     call test_reproducibility()
+    call test_policy_stream_isolation()
     call test_ccm_baseline_parity()
+    call test_fractional_wealth_metrics()
     call test_integration_metrics_csv()
     call test_edge_cases()
 
@@ -145,6 +172,10 @@ contains
         call check(ieee_is_finite(p) .and. p > 1.0_rk - 1.0e-12_rk, 'sigmoid saturates high, finite')
         p = tlu_sigmoid(-1000.0_rk)
         call check(ieee_is_finite(p) .and. p < 1.0e-12_rk, 'sigmoid saturates low, finite')
+        w = [100.0_rk, 0.0_rk, 0.0_rk, 0.0_rk]
+        x = [1.0_rk, 0.0_rk, 0.0_rk, 0.0_rk]
+        p = tlu_action_probability(w, x, tiny(1.0_rk))
+        call check(ieee_is_finite(p) .and. p > 0.99_rk, 'tiny temperature saturates before division')
 
         ! Clip helper
         call check(req(tlu_clip(5.0_rk, -2.0_rk, 3.0_rk), 3.0_rk), 'clip high')
@@ -169,6 +200,10 @@ contains
         w = [0.1_rk, -0.2_rk, 0.3_rk, -0.4_rk]
         call tlu_reinforce_update(w, x, 1, 0.6_rk, 0.5_rk, 0.0_rk, 2.0_rk, 5.0_rk)
         call check(reqv(w, [0.1_rk, -0.2_rk, 0.3_rk, -0.4_rk]), 'zero learning rate freezes weights')
+        w = [10.0_rk, -10.0_rk, 0.0_rk, 0.0_rk]
+        call tlu_reinforce_update(w, x, 1, 0.6_rk, 0.5_rk, 0.0_rk, 2.0_rk, 5.0_rk)
+        call check(reqv(w, [10.0_rk, -10.0_rk, 0.0_rk, 0.0_rk]), &
+                   'zero learning rate does not clip existing weights')
 
         ! Per-weight clipping on both sides
         w = [4.9_rk, -4.9_rk, 0.0_rk, 0.0_rk]
@@ -177,6 +212,11 @@ contains
         call check(req(w(1), 5.0_rk), 'weight clip high')
         call check(req(w(2), -5.0_rk), 'weight clip low')
         call check(req(w(3), 0.0_rk), 'zero feature gives zero update')
+
+        w = 0.0_rk
+        x = [1.0_rk, 0.0_rk, 0.0_rk, 0.0_rk]
+        call tlu_reinforce_update(w, x, 1, 0.5_rk, 1.0e-120_rk, 0.1_rk, 1.0_rk, 5.0_rk)
+        call check(abs(w(1) / 5.0e-122_rk - 1.0_rk) < 1.0e-14_rk, 'tiny valid reward retains learning signal')
     end subroutine test_learning_arithmetic
 
     !------------------------------------------------------------
@@ -271,42 +311,49 @@ contains
         cfg % reward_clip = 0.0_rk
         msg = cfg % check_ccm_exchange_tlu()
         call check(len(msg) > 0, 'nonpositive reward_clip rejected')
+
+        cfg = Config_CCMExchangeTLU()
+        cfg % min_saving_propensity = ieee_value(0.0_rk, ieee_quiet_nan)
+        msg = cfg % check_ccm_exchange_tlu()
+        call check(len(msg) > 0, 'NaN minimum saving rejected without invalid arithmetic')
+        cfg = Config_CCMExchangeTLU()
+        cfg % max_saving_propensity = ieee_value(0.0_rk, ieee_quiet_nan)
+        msg = cfg % check_ccm_exchange_tlu()
+        call check(len(msg) > 0, 'NaN maximum saving rejected')
+        cfg = Config_CCMExchangeTLU()
+        cfg % learning_rate = ieee_value(0.0_rk, ieee_positive_inf)
+        msg = cfg % check_ccm_exchange_tlu()
+        call check(len(msg) > 0, 'infinite learning rate rejected')
     end subroutine test_config_validation
 
     !------------------------------------------------------------
     ! Select the model through the shipped template namelist files.
-    ! Only runs when the test working directory is the package root;
-    ! otherwise it reports a skip (direct-config tests still cover
-    ! all six modes).
+    ! Use a unique temporary directory: never replace user namelists.
     subroutine test_factory_template_files()
-        logical :: has_templates, has_sim_type, has_in
-        integer :: es, cs
+        logical :: has_templates
+        integer :: es, unit, im, t
+        character(kind=c_char, len=4096) :: original_directory, temp_directory
+        type(c_ptr) :: ptr
+        character(len=32) :: modes(6)
         class(AbstractConfig), allocatable :: gcfg
         class(AbstractSimulator), allocatable :: gsim
         real(rk), allocatable :: m(:)
         logical :: saw_tlu
 
         inquire (file='templates/CCMExchangeTLU/sim_type.nml', exist=has_templates)
-        inquire (file='sim_type.nml', exist=has_sim_type)
-        if (.not. (has_templates .and. has_sim_type)) then
-            print *, 'SKIP: template-file factory test (not running from package root)'
-            return
-        end if
-        inquire (file='in.nml', exist=has_in)
-
-        call execute_command_line('cp sim_type.nml test_tlu_backup_sim_type.nml', &
-                                  exitstat=es, cmdstat=cs)
-        call check(es == 0, 'backup sim_type.nml')
-        if (has_in) then
-            call execute_command_line('cp in.nml test_tlu_backup_in.nml', exitstat=es, cmdstat=cs)
-            call check(es == 0, 'backup in.nml')
-        end if
-        call execute_command_line('cp templates/CCMExchangeTLU/sim_type.nml sim_type.nml', &
-                                  exitstat=es, cmdstat=cs)
-        call check(es == 0, 'install template sim_type.nml')
-        call execute_command_line('cp templates/CCMExchangeTLU/in.nml in.nml', &
-                                  exitstat=es, cmdstat=cs)
-        call check(es == 0, 'install template in.nml')
+        call check(has_templates, 'shipped template files exist (run tests from package root)')
+        if (.not. has_templates) return
+        ptr = c_getcwd(original_directory, len(original_directory, kind=c_size_t))
+        if (.not. c_associated(ptr)) error stop 'getcwd failed'
+        original_directory = original_directory(:index(original_directory, c_null_char) - 1)
+        temp_directory = '/tmp/boltz-tlu-XXXXXX'//c_null_char
+        ptr = mkdtemp(temp_directory)
+        if (.not. c_associated(ptr)) error stop 'mkdtemp failed'
+        temp_directory = temp_directory(:index(temp_directory, c_null_char) - 1)
+        es = c_chdir(trim(temp_directory)//c_null_char)
+        if (es /= 0) error stop 'chdir to test directory failed'
+        call copy_text_file(trim(original_directory)//'/templates/CCMExchangeTLU/sim_type.nml', 'sim_type.nml')
+        call copy_text_file(trim(original_directory)//'/templates/CCMExchangeTLU/in.nml', 'in.nml')
 
         saw_tlu = .false.
         gcfg = create_config()
@@ -336,19 +383,86 @@ contains
         end select
         call check(saw_tlu, 'template selects CCMExchangeTLU simulator')
 
-        ! Restore the original namelist files before any further checks.
-        call execute_command_line('cp test_tlu_backup_sim_type.nml sim_type.nml', &
-                                  exitstat=es, cmdstat=cs)
-        call check(es == 0, 'restore sim_type.nml')
-        if (has_in) then
-            call execute_command_line('cp test_tlu_backup_in.nml in.nml', exitstat=es, cmdstat=cs)
-            call check(es == 0, 'restore in.nml')
-        else
-            call execute_command_line('rm -f in.nml', exitstat=es, cmdstat=cs)
-        end if
-        call execute_command_line('rm -f test_tlu_backup_sim_type.nml test_tlu_backup_in.nml', &
-                                  exitstat=es, cmdstat=cs)
+        modes = ['ccm_fixed     ', 'binary_fixed  ', 'binary_random ', &
+                 'heuristic     ', 'tlu_fixed     ', 'tlu_learning  ']
+        call execute_command_line('mkdir out', exitstat=es)
+        call check(es == 0, 'create isolated run output directory')
+        do im = 1, size(modes)
+            open (newunit=unit, file='in.nml', status='replace')
+            write (unit, '(a)') "&run n_agents=5, n_steps=3, write_every=1, policy_mode='"//trim(modes(im))//"' /"
+            close (unit)
+            gcfg = create_config()
+            call gcfg % read_nml()
+            gsim = create_simulator()
+            call gsim % init(gcfg)
+            call gsim % run()
+            m = gsim % compute_metrics()
+            call check(all(ieee_is_finite(m)), trim(modes(im))//': namelist run metrics finite')
+            call check_run_metrics_csv(trim(modes(im)))
+        end do
+        do t = 0, 3
+            block
+                character(len=40) :: path
+                write (path, '(a,i0,a)') 'out/', t, '.step.csv'
+                call delete_test_file(trim(path))
+            end block
+        end do
+        call delete_test_file('out/simulation_metrics.csv')
+        es = rmdir('out'//c_null_char)
+        call check(es == 0, 'remove isolated output directory')
+        call delete_test_file('in.nml')
+        call delete_test_file('sim_type.nml')
+        es = c_chdir(trim(original_directory)//c_null_char)
+        if (es /= 0) error stop 'restore working directory failed'
+        es = rmdir(trim(temp_directory)//c_null_char)
+        call check(es == 0, 'remove isolated test directory')
     end subroutine test_factory_template_files
+
+    subroutine copy_text_file(source, destination)
+        character(*), intent(in) :: source, destination
+        integer :: input_unit, output_unit, ios
+        character(len=512) :: line
+        open (newunit=input_unit, file=source, status='old', action='read')
+        open (newunit=output_unit, file=destination, status='new', action='write')
+        do
+            read (input_unit, '(a)', iostat=ios) line
+            if (ios /= 0) exit
+            write (output_unit, '(a)') trim(line)
+        end do
+        close (input_unit)
+        close (output_unit)
+    end subroutine copy_text_file
+
+    subroutine delete_test_file(path)
+        character(*), intent(in) :: path
+        integer :: unit
+        open (newunit=unit, file=path, status='old')
+        close (unit, status='delete')
+    end subroutine delete_test_file
+
+    subroutine check_run_metrics_csv(tag)
+        character(*), intent(in) :: tag
+        integer :: unit, ios, timestep, rows
+        real(rk) :: values(9)
+        character(len=512) :: header
+        open (newunit=unit, file='out/simulation_metrics.csv', status='old', action='read')
+        read (unit, '(a)') header
+        call check(trim(header) == 'timestep,gini_coefficient,top_10pct_wealth_share,'// &
+            'top_1pct_wealth_share,mean_saving_propensity,high_action_fraction,mean_abs_reward,'// &
+            'rejected_trade_fraction,total_wealth,mean_weight_norm', tag//': run CSV metric labels')
+        rows = 0
+        do
+            read (unit, *, iostat=ios) timestep, values
+            if (ios < 0) exit
+            call check(ios == 0, tag//': run CSV row parses')
+            if (ios /= 0) exit
+            call check(timestep == rows, tag//': run CSV cadence')
+            call check(all(ieee_is_finite(values)), tag//': run CSV values finite')
+            rows = rows + 1
+        end do
+        call check(rows == 4, tag//': run writes initial and three step metrics')
+        close (unit)
+    end subroutine check_run_metrics_csv
 
     !------------------------------------------------------------
     subroutine test_all_modes_init()
@@ -596,6 +710,50 @@ contains
                    'rejected fraction reproduces')
     end subroutine test_reproducibility
 
+    ! All modes share matchmaking/epsilon streams, independent of policy
+    ! draws, other simulator instances, and unrelated intrinsic RNG calls.
+    subroutine test_policy_stream_isolation()
+        type(Config_CCMExchangeTLU) :: cfg
+        type(CCMExchangeTLU) :: reference, sim
+        character(len=32) :: modes(6)
+        integer :: im, t, nseed
+        integer, allocatable :: before(:), after(:)
+        real(rk) :: expected(10, 5), actual(10), unrelated
+
+        modes = ['ccm_fixed     ', 'binary_fixed  ', 'binary_random ', &
+                 'heuristic     ', 'tlu_fixed     ', 'tlu_learning  ']
+        call make_cfg(cfg, 'ccm_fixed', 10_int64, 98765_int64)
+        cfg % min_saving_propensity = 0.4_rk
+        cfg % max_saving_propensity = 0.4_rk
+        cfg % lambda_low = 0.4_rk
+        cfg % lambda_high = 0.4_rk
+        call reference % init(cfg)
+        do t = 1, 5
+            call reference % step()
+            expected(:, t) = reference % pop % cash
+        end do
+        call random_seed(size=nseed)
+        allocate (before(nseed), after(nseed))
+        do im = 1, 6
+            cfg % policy_mode = modes(im)
+            call random_seed(get=before)
+            call sim % init(cfg)
+            call random_seed(get=after)
+            call check(all(before == after), trim(modes(im))//': init preserves ambient RNG')
+            do t = 1, 5
+                call random_number(unrelated)
+                call random_seed(get=before)
+                call sim % step()
+                call random_seed(get=after)
+                call check(all(before == after), trim(modes(im))//': step preserves ambient RNG')
+                actual = sim % pop % cash
+                call check(reqv(actual, expected(:, t)), trim(modes(im))//': common exchange trajectory')
+                ! Interleave another simulator to check per-instance ownership.
+                call reference % step()
+            end do
+        end do
+    end subroutine test_policy_stream_isolation
+
     !------------------------------------------------------------
     ! ccm_fixed must reproduce the corrected CCMExchange benchmark
     ! trajectory exactly (aligned RNG streams, same 2x2 arithmetic).
@@ -638,16 +796,42 @@ contains
         call check(same, 'ccm_fixed matches CCMExchange trajectories')
     end subroutine test_ccm_baseline_parity
 
+    subroutine test_fractional_wealth_metrics()
+        type(Config_CCMExchangeTLU) :: cfg
+        type(CCMExchangeTLU) :: sim
+        real(rk), allocatable :: m(:)
+        real(rk) :: values(5)
+
+        call make_cfg(cfg, 'ccm_fixed', 4_int64, 42_int64)
+        call sim % init(cfg)
+        sim % pop % cash = [0.9_rk, 0.1_rk, 0.7_rk, 0.3_rk]
+        m = sim % compute_metrics()
+        call check(abs(m(1) - 0.35_rk) < 1.0e-14_rk, 'known fractional-wealth Gini')
+        call check(abs(m(2) - 0.45_rk) < 1.0e-14_rk, 'known fractional top10 wealth share')
+        call check(abs(m(3) - 0.45_rk) < 1.0e-14_rk, 'known fractional top1 wealth share')
+        values = [1.0e20_rk, -1.0e20_rk, 0.3_rk, 0.1_rk, 0.2_rk]
+        call sort_real_array(values)
+        call check(reqv(values, [-1.0e20_rk, 0.1_rk, 0.2_rk, 0.3_rk, 1.0e20_rk]), &
+                   'wealth sort handles fractional and large differences')
+    end subroutine test_fractional_wealth_metrics
+
     !------------------------------------------------------------
     subroutine check_csv_file(sim, n, tag)
         type(CCMExchangeTLU), intent(in) :: sim
         integer, intent(in) :: n
         character(*), intent(in) :: tag
         character(len=512) :: line
-        character(len=*), parameter :: fname = 'test_tlu_tmp_pop.csv'
-        integer :: uu, ios, nlines, rid, ract
+        character(kind=c_char, len=64) :: temp_directory
+        character(len=:), allocatable :: fname
+        type(c_ptr) :: ptr
+        integer :: uu, ios, nlines, rid, ract, es
         real(rk) :: rcash, rsav, rprob, rrew, rema, w0, w1, w2, w3
 
+        temp_directory = '/tmp/boltz-csv-XXXXXX'//c_null_char
+        ptr = mkdtemp(temp_directory)
+        if (.not. c_associated(ptr)) error stop 'mkdtemp for CSV failed'
+        temp_directory = temp_directory(:index(temp_directory, c_null_char) - 1)
+        fname = trim(temp_directory)//'/population.csv'
         call sim % write_population_csv(fname)
         open (newunit=uu, file=fname, status='old', action='read', iostat=ios)
         call check(ios == 0, tag//': csv opens')
@@ -665,10 +849,17 @@ contains
         call check(nlines == n, tag//': csv row count')
         rewind (uu)
         read (uu, '(a)') line
-        read (uu, *, iostat=ios) rid, rcash, rsav, ract, rprob, rrew, rema, w0, w1, w2, w3
+        read (uu, '(a)') line
+        read (line, *, iostat=ios) rid, rcash, rsav, ract, rprob, rrew, rema, w0, w1, w2, w3
         call check(ios == 0, tag//': first csv row parses')
         call check(rid == 1, tag//': first csv row id')
+        call check(req(rcash, sim % pop(1) % cash), tag//': CSV cash round trips exactly')
+        call check(req(rrew, sim % pop(1) % last_reward), tag//': CSV reward round trips exactly')
+        if (rcash > 0.0_rk .and. rcash < 1.0e-100_rk) &
+            call check(index(line, 'E-') > 0, tag//': tiny CSV values retain exponent marker')
         close (uu, status='delete')
+        es = rmdir(trim(temp_directory)//c_null_char)
+        call check(es == 0, tag//': remove CSV test directory')
     end subroutine check_csv_file
 
     subroutine test_integration_metrics_csv()
@@ -725,9 +916,10 @@ contains
     !------------------------------------------------------------
     subroutine test_edge_cases()
         type(Config_CCMExchangeTLU) :: cfg
-        type(CCMExchangeTLU) :: sim
+        type(CCMExchangeTLU) :: sim, prior
         character(len=32) :: modes(6)
-        integer :: im, t
+        integer :: im, t, idle, perm(5)
+        integer, allocatable :: ambient(:)
         real(rk) :: total0, total1, ema0
         real(rk) :: w0(4)
 
@@ -752,8 +944,24 @@ contains
         call make_cfg(cfg, 'tlu_learning', 5_int64, 5_int64)
         call sim % init(cfg)
         total0 = sum(sim % pop % cash)
+        allocate (ambient(size(sim % pairing_state)))
         do t = 1, 3
+            prior = sim
+            call random_seed(get=ambient)
+            call random_seed(put=sim % pairing_state)
+            perm = [1, 2, 3, 4, 5]
+            call shuffle_int(perm)
+            idle = perm(5)
+            call random_seed(put=ambient)
             call sim % step()
+            call check(req(sim % pop(idle) % cash, prior % pop(idle) % cash) .and. &
+                       reqv(sim % pop(idle) % weights, prior % pop(idle) % weights) .and. &
+                       req(sim % pop(idle) % reward_ema, prior % pop(idle) % reward_ema) .and. &
+                       req(sim % pop(idle) % last_reward, prior % pop(idle) % last_reward) .and. &
+                       req(sim % pop(idle) % saving_propensity, prior % pop(idle) % saving_propensity) .and. &
+                       req(sim % pop(idle) % last_policy_probability, prior % pop(idle) % last_policy_probability) .and. &
+                       sim % pop(idle) % last_action == prior % pop(idle) % last_action, &
+                       'odd unpaired agent retains its full state')
         end do
         total1 = sum(sim % pop % cash)
         call check(abs(total1 - total0) < 1.0e-12_rk, 'odd population conserves wealth')
@@ -772,6 +980,16 @@ contains
         call check(abs(sim % pop(1) % reward_ema - sim % memory_decay * ema0) < 1.0e-15_rk, &
                    'rejected trade decays ema toward zero')
         call check(req(sim % pop(1) % last_reward, 0.0_rk), 'rejected trade reward is zero')
+
+        ! Very small valid cash/rewards must remain readable by Python CSV
+        ! consumers: explicitly retain E with three-digit exponents.
+        call make_cfg(cfg, 'tlu_learning', 2_int64, 5_int64)
+        cfg % init_cash = 1.0e-120_rk
+        cfg % exchange_delta = 1.0e-121_rk
+        call sim % init(cfg)
+        call sim % step()
+        sim % pop(1) % last_reward = 1.2345678901234567e-120_rk
+        call check_csv_file(sim, 2, 'tiny finite cash and reward')
     end subroutine test_edge_cases
 
 end program test_ccm_exchange_tlu

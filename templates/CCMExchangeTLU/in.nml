@@ -1,0 +1,25 @@
+&run
+! Match these common settings across policy comparisons.
+n_agents = 10000
+n_steps = 20000
+init_cash = 50.0
+debt_limit = 0.0
+exchange_delta = 1.0
+! In the CCM rule, exchange_delta sets the rejection floor, not trade size.
+min_saving_propensity = 0.1
+max_saving_propensity = 0.9
+seed = 20261015
+write_every = 500
+! ccm_fixed, binary_fixed, binary_random, heuristic, tlu_fixed, tlu_learning
+policy_mode = 'tlu_learning'
+lambda_low = 0.2
+lambda_high = 0.8
+learning_rate = 0.01
+policy_temperature = 1.0
+weight_init_scale = 0.1
+weight_clip = 5.0
+reward_clip = 2.0
+memory_decay = 0.9
+use_partner_wealth = .true.
+use_memory = .true.
+/

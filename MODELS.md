@@ -106,15 +106,27 @@ Configuration parameters (on top of the `CCMExchange` ones, which keep their mea
 - `memory_decay`: EMA decay on [0, 1) (default 0.9)
 - `use_partner_wealth`, `use_memory`: feature ablations; disabled inputs are set to zero (both default `.true.`)
 
-Reproducibility: matchmaking and exchange epsilons use the same RNG streams as `CCMExchange`; policy
-initialization/exploration uses a separate stream derived deterministically from the nonzero `seed`, so
-policy draws never consume the pairing/exchange sequences. Identical seed, settings, compiler, and execution
+Reproducibility: matchmaking and exchange epsilons use the same RNG streams as `CCMExchange`; every mode
+reserves the reference model's initial continuous-saving draws so the pairing stream starts at the same
+position. Matchmaking state belongs to each simulator instance. Binary/TLU policy initialization/exploration
+uses a separate stream derived deterministically from the nonzero `seed`, so policy draws never consume the
+pairing/exchange sequences. Identical seed, settings, compiler, and execution
 mode reproduce CPU results (cross-thread-count or cross-compiler bitwise identity is not guaranteed).
+
+The inherited rejection condition is `new_cash < exchange_delta - debt_limit` for either agent;
+`exchange_delta` therefore imposes a minimum post-trade balance, rather than setting the CCM trade amount.
+Rejected trades keep cash and weights unchanged and decay memory toward zero. Learning follows the plan's
+accepted-trade-only update: when acceptance depends on the action, this is a REINFORCE-style heuristic,
+not an unbiased policy gradient of unconditional expected cash gain. The sigmoid clamp also makes the
+score update approximate at saturation. Compare rejection rates alongside learning outcomes.
 
 Population CSV columns (`agent_id,cash,saving_propensity,last_action,last_policy_probability,last_reward,reward_ema,w0,w1,w2,w3`):
 at `t = 0`, `last_reward` and `reward_ema` are 0; non-TLU modes keep weights at 0; `ccm_fixed` uses
 `last_action = -1` and `last_policy_probability = -1` as inapplicable sentinels (its `high_action_fraction`
 metric is likewise 0 by construction); `mean_weight_norm` is 0 for non-TLU modes.
+Other initial actions follow the policy at equal wealth and zero memory; `binary_random` starts at the
+low action with probability diagnostic 0.5. The top-share metrics include at least one richest agent,
+so in populations below 100 agents the top-1% value is a one-agent share.
 
 Metrics tracked (in order):
 - `gini_coefficient`, `top_10pct_wealth_share`, `top_1pct_wealth_share`
@@ -123,6 +135,10 @@ Metrics tracked (in order):
 
 To run it, copy `templates/CCMExchangeTLU/in.nml` to `in.nml` and `templates/CCMExchangeTLU/sim_type.nml` to
 `sim_type.nml`, then build and run as usual.
+The template lists all effective default settings. Retain the two namelists with each experiment and
+record any omitted settings using the template defaults. Use saved population snapshots for mobility
+analysis; `write_every` controls their cadence. Run automated tests from the repository root with
+`fpm test` after loading the compiler environment.
 
 ## ConservativeExchangeMarket
 

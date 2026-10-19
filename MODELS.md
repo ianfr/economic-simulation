@@ -73,6 +73,57 @@ Configuration parameters:
 - `seed`: Random seed for reproducibility
 - `write_every`: Frequency of CSV output (every N steps)
 
+## CCMExchangeTLU
+
+Same money-conserving pair-selection and 2x2 exchange rule as `CCMExchange`, but agents choose their saving
+propensities through a threshold logic unit (TLU) over four bounded, dimensionless inputs
+(`1`, own-wealth deviation, partner-wealth deviation, reward memory). Supports fixed, random, heuristic,
+fixed-TLU, and online-learning stochastic-TLU policies in one model so fixed-vs-adaptive comparisons share
+infrastructure and metrics. Rewards are myopic individual cash gains in a conservative exchange, not a
+social-welfare target.
+
+Policy modes (`policy_mode`):
+- `ccm_fixed`: one continuous saving propensity per agent sampled on
+  `[min_saving_propensity, max_saving_propensity]` at initialization, never changed (CCM reference).
+- `binary_fixed`: `lambda_low` or `lambda_high` assigned once per agent with probability 0.5.
+- `binary_random`: low/high saving chosen with probability 0.5 at each matched exchange.
+- `heuristic`: high saving when own pre-trade wealth is below the population initial mean, else low saving.
+- `tlu_fixed`: deterministic threshold decisions with fixed, randomly initialized weights.
+- `tlu_learning`: stochastic-threshold (`p = sigmoid(z / policy_temperature)`) decisions with a per-trade
+  Bernoulli score-function (REINFORCE) weight update against the prior `reward_ema` baseline.
+
+Note: `ccm_fixed` uses a continuous saving distribution while `binary_fixed` is the direct control for the
+two-action agents.
+
+Configuration parameters (on top of the `CCMExchange` ones, which keep their meaning):
+- `policy_mode`: one of the six modes above (default `'tlu_learning'`)
+- `lambda_low`, `lambda_high`: two-level saving propensities on [0, 1] (defaults 0.2, 0.8)
+- `learning_rate`: REINFORCE step size, >= 0 (default 0.01; 0 keeps stochastic actions but freezes weights)
+- `policy_temperature`: sigmoid temperature, > 0 (default 1.0)
+- `weight_init_scale`: weights initialized uniform on `[-scale, +scale]` (default 0.1)
+- `weight_clip`: per-weight clip bound, > 0 (default 5.0)
+- `reward_clip`: per-trade reward clip bound, > 0 (default 2.0)
+- `memory_decay`: EMA decay on [0, 1) (default 0.9)
+- `use_partner_wealth`, `use_memory`: feature ablations; disabled inputs are set to zero (both default `.true.`)
+
+Reproducibility: matchmaking and exchange epsilons use the same RNG streams as `CCMExchange`; policy
+initialization/exploration uses a separate stream derived deterministically from the nonzero `seed`, so
+policy draws never consume the pairing/exchange sequences. Identical seed, settings, compiler, and execution
+mode reproduce CPU results (cross-thread-count or cross-compiler bitwise identity is not guaranteed).
+
+Population CSV columns (`agent_id,cash,saving_propensity,last_action,last_policy_probability,last_reward,reward_ema,w0,w1,w2,w3`):
+at `t = 0`, `last_reward` and `reward_ema` are 0; non-TLU modes keep weights at 0; `ccm_fixed` uses
+`last_action = -1` and `last_policy_probability = -1` as inapplicable sentinels (its `high_action_fraction`
+metric is likewise 0 by construction); `mean_weight_norm` is 0 for non-TLU modes.
+
+Metrics tracked (in order):
+- `gini_coefficient`, `top_10pct_wealth_share`, `top_1pct_wealth_share`
+- `mean_saving_propensity`, `high_action_fraction` (binary policies; 0 for `ccm_fixed`)
+- `mean_abs_reward` (most recent step), `rejected_trade_fraction`, `total_wealth`, `mean_weight_norm`
+
+To run it, copy `templates/CCMExchangeTLU/in.nml` to `in.nml` and `templates/CCMExchangeTLU/sim_type.nml` to
+`sim_type.nml`, then build and run as usual.
+
 ## ConservativeExchangeMarket
 
 Based on references (3) III.B and (4) in [README.md](README.md). This model implements an extremal dynamics approach where the poorest agent is identified and participates in wealth exchange.

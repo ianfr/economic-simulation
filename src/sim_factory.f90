@@ -14,6 +14,7 @@ module sim_factory_m
     use model_simple_exchange_m
     use model_kinetic_ising_m
     use model_ccm_exchange_m
+    use model_ccm_exchange_tlu_m
     use model_conservative_exchange_market_m
     use model_stochastic_preferences_m
 #ifdef BOLTZ_USE_COARRAY
@@ -44,6 +45,8 @@ contains
             allocate (sim, source=KineticIsing())
         case ('CCMExchange')
             allocate (sim, source=CCMExchange())
+        case ('CCMExchangeTLU')
+            allocate (sim, source=CCMExchangeTLU())
         case ('ConservativeExchangeMarket')
             allocate (sim, source=ConservativeExchangeMarket())
         case ('StochasticPreferences')

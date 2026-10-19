@@ -38,6 +38,7 @@ Agent-based economic simulation framework leveraging CUDA Fortran and multicore 
     - `CoSimpleExchange` - Coarray version of `SimpleExchange`
     - `KineticIsing` - Extension of `SimpleExchange` where agents have buy/sell 'spins'
     - `CCMExchange` - Extension of `SimpleExchange` where agents have individual propsensities to save
+    - `CCMExchangeTLU` - `CCMExchange` mechanics where agents choose saving propensities via threshold logic units (see [MODELS.md](MODELS.md))
     - `ConservativeExchangeMarket` - Proximity-based wealth redistribution model - reference (4)
     - `StochasticPreferences` - Exchange market where agents have stochastic preferences for two goods - reference (5)
 - Builds<sup>2</sup> with `gfortran` 15.1+ and `nvfortran 25.5+`

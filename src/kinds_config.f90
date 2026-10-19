@@ -41,6 +41,7 @@ end module abstract_config_m
 module config_m
     use kinds_m
     use abstract_config_m
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
 
     ! Configuration type for simple exchange simulations
@@ -86,6 +87,34 @@ module config_m
         procedure :: read_nml => read_nml_ccm_exchange
         procedure :: validate => validate_ccm_exchange
     end type Config_CCMExchange
+
+    ! Configuration type for CCMExchangeTLU simulations (adaptive-threshold agents)
+    type, extends(AbstractConfig) :: Config_CCMExchangeTLU
+        integer(int64) :: n_agents = 10000
+        integer(int64) :: n_steps = 20000
+        real(rk)       :: init_cash = 50.0_rk
+        real(rk)       :: debt_limit = 0.0_rk
+        real(rk)       :: exchange_delta = 1.0_rk
+        real(rk)       :: min_saving_propensity = 0.1_rk
+        real(rk)       :: max_saving_propensity = 0.9_rk
+        integer(int64) :: seed = 20261015
+        integer(int64) :: write_every = 500
+        character(len=32) :: policy_mode = 'tlu_learning'
+        real(rk)       :: lambda_low = 0.2_rk
+        real(rk)       :: lambda_high = 0.8_rk
+        real(rk)       :: learning_rate = 0.01_rk
+        real(rk)       :: policy_temperature = 1.0_rk
+        real(rk)       :: weight_init_scale = 0.1_rk
+        real(rk)       :: weight_clip = 5.0_rk
+        real(rk)       :: reward_clip = 2.0_rk
+        real(rk)       :: memory_decay = 0.9_rk
+        logical :: use_partner_wealth = .true.
+        logical :: use_memory = .true.
+    contains
+        procedure :: read_nml => read_nml_ccm_exchange_tlu
+        procedure :: validate => validate_ccm_exchange_tlu
+        procedure :: check_ccm_exchange_tlu
+    end type Config_CCMExchangeTLU
 
     ! Configuration type for CEM (Conservative Exchange Market) simulations
     type, extends(AbstractConfig) :: Config_ConservativeExchangeMarket
@@ -157,6 +186,8 @@ contains
             allocate (cfg, source=Config_KineticIsing())
         case ('CCMExchange')
             allocate (cfg, source=Config_CCMExchange())
+        case ('CCMExchangeTLU')
+            allocate (cfg, source=Config_CCMExchangeTLU())
         case ('ConservativeExchangeMarket')
             allocate (cfg, source=Config_ConservativeExchangeMarket())
         case ('StochasticPreferences')
@@ -303,6 +334,179 @@ contains
         if (this % min_saving_propensity > this % max_saving_propensity) &
             error stop 'min_saving_propensity must be <= max_saving_propensity'
     end subroutine validate_ccm_exchange
+
+    ! Read the configuration from 'in.nml' for a CCMExchangeTLU simulation
+    subroutine read_nml_ccm_exchange_tlu(this)
+        class(Config_CCMExchangeTLU), intent(inout) :: this
+
+        logical :: nml_exists
+        integer(int64) :: n_agents, n_steps, seed, write_every
+        real(rk) :: init_cash, debt_limit, exchange_delta
+        real(rk) :: min_saving_propensity, max_saving_propensity
+        real(rk) :: lambda_low, lambda_high, learning_rate, policy_temperature
+        real(rk) :: weight_init_scale, weight_clip, reward_clip, memory_decay
+        character(len=32) :: policy_mode
+        logical :: use_partner_wealth, use_memory
+
+        namelist /run/ n_agents, n_steps, init_cash, debt_limit, exchange_delta, &
+            min_saving_propensity, max_saving_propensity, seed, write_every, &
+            policy_mode, lambda_low, lambda_high, learning_rate, policy_temperature, &
+            weight_init_scale, weight_clip, reward_clip, memory_decay, &
+            use_partner_wealth, use_memory
+
+        inquire (file='in.nml', exist=nml_exists)
+
+        if (nml_exists) then
+            n_agents = this % n_agents
+            n_steps = this % n_steps
+            init_cash = this % init_cash
+            debt_limit = this % debt_limit
+            exchange_delta = this % exchange_delta
+            min_saving_propensity = this % min_saving_propensity
+            max_saving_propensity = this % max_saving_propensity
+            seed = this % seed
+            write_every = this % write_every
+            policy_mode = this % policy_mode
+            lambda_low = this % lambda_low
+            lambda_high = this % lambda_high
+            learning_rate = this % learning_rate
+            policy_temperature = this % policy_temperature
+            weight_init_scale = this % weight_init_scale
+            weight_clip = this % weight_clip
+            reward_clip = this % reward_clip
+            memory_decay = this % memory_decay
+            use_partner_wealth = this % use_partner_wealth
+            use_memory = this % use_memory
+
+            open (unit=10, file='in.nml', status='old', action='read')
+            read (10, nml=run)
+            close (10)
+
+            this % n_agents = n_agents
+            this % n_steps = n_steps
+            this % init_cash = init_cash
+            this % debt_limit = debt_limit
+            this % exchange_delta = exchange_delta
+            this % min_saving_propensity = min_saving_propensity
+            this % max_saving_propensity = max_saving_propensity
+            this % seed = seed
+            this % write_every = write_every
+            this % policy_mode = policy_mode
+            this % lambda_low = lambda_low
+            this % lambda_high = lambda_high
+            this % learning_rate = learning_rate
+            this % policy_temperature = policy_temperature
+            this % weight_init_scale = weight_init_scale
+            this % weight_clip = weight_clip
+            this % reward_clip = reward_clip
+            this % memory_decay = memory_decay
+            this % use_partner_wealth = use_partner_wealth
+            this % use_memory = use_memory
+        end if
+
+        call this % validate()
+    end subroutine read_nml_ccm_exchange_tlu
+
+    ! Non-stopping validation check for CCMExchangeTLU configs.
+    ! Returns an empty string when valid, otherwise a human-readable reason.
+    ! The stopping validate() below and the unit tests both use this function.
+    function check_ccm_exchange_tlu(this) result(errmsg)
+        class(Config_CCMExchangeTLU), intent(in) :: this
+        character(len=:), allocatable :: errmsg
+
+        errmsg = ''
+        if (this % n_agents < 2) then
+            errmsg = 'CCMExchangeTLU: n_agents must be >= 2'
+            return
+        end if
+        if (this % n_steps < 0) then
+            errmsg = 'CCMExchangeTLU: n_steps must be >= 0'
+            return
+        end if
+        if (this % write_every < 1) then
+            errmsg = 'CCMExchangeTLU: write_every must be >= 1'
+            return
+        end if
+        if (.not. ieee_is_finite(this % init_cash) .or. this % init_cash <= 0.0_rk) then
+            errmsg = 'CCMExchangeTLU: init_cash must be positive and finite (mean_cash > 0 required)'
+            return
+        end if
+        if (.not. ieee_is_finite(this % debt_limit) .or. this % debt_limit < 0.0_rk) then
+            errmsg = 'CCMExchangeTLU: debt_limit must be >= 0 and finite'
+            return
+        end if
+        if (.not. ieee_is_finite(this % exchange_delta) .or. this % exchange_delta <= 0.0_rk) then
+            errmsg = 'CCMExchangeTLU: exchange_delta must be > 0 and finite'
+            return
+        end if
+        if (this % min_saving_propensity < 0.0_rk .or. this % min_saving_propensity > 1.0_rk) then
+            errmsg = 'CCMExchangeTLU: min_saving_propensity must lie on [0, 1]'
+            return
+        end if
+        if (this % max_saving_propensity < 0.0_rk .or. this % max_saving_propensity > 1.0_rk) then
+            errmsg = 'CCMExchangeTLU: max_saving_propensity must lie on [0, 1]'
+            return
+        end if
+        if (this % min_saving_propensity > this % max_saving_propensity) then
+            errmsg = 'CCMExchangeTLU: min_saving_propensity must be <= max_saving_propensity'
+            return
+        end if
+        select case (trim(this % policy_mode))
+        case ('ccm_fixed', 'binary_fixed', 'binary_random', 'heuristic', 'tlu_fixed', 'tlu_learning')
+        case default
+            errmsg = 'CCMExchangeTLU: unknown policy_mode "'//trim(this % policy_mode)// &
+                '"; expected one of ccm_fixed, binary_fixed, binary_random, heuristic, tlu_fixed, tlu_learning'
+            return
+        end select
+        if (.not. ieee_is_finite(this % lambda_low) .or. this % lambda_low < 0.0_rk .or. &
+            this % lambda_low > 1.0_rk) then
+            errmsg = 'CCMExchangeTLU: lambda_low must lie on [0, 1]'
+            return
+        end if
+        if (.not. ieee_is_finite(this % lambda_high) .or. this % lambda_high < 0.0_rk .or. &
+            this % lambda_high > 1.0_rk) then
+            errmsg = 'CCMExchangeTLU: lambda_high must lie on [0, 1]'
+            return
+        end if
+        if (this % lambda_low > this % lambda_high) then
+            errmsg = 'CCMExchangeTLU: lambda_low must be <= lambda_high'
+            return
+        end if
+        if (.not. ieee_is_finite(this % learning_rate) .or. this % learning_rate < 0.0_rk) then
+            errmsg = 'CCMExchangeTLU: learning_rate must be >= 0 and finite'
+            return
+        end if
+        if (.not. ieee_is_finite(this % policy_temperature) .or. this % policy_temperature <= 0.0_rk) then
+            errmsg = 'CCMExchangeTLU: policy_temperature must be > 0 and finite'
+            return
+        end if
+        if (.not. ieee_is_finite(this % weight_init_scale) .or. this % weight_init_scale < 0.0_rk) then
+            errmsg = 'CCMExchangeTLU: weight_init_scale must be >= 0 and finite'
+            return
+        end if
+        if (.not. ieee_is_finite(this % weight_clip) .or. this % weight_clip <= 0.0_rk) then
+            errmsg = 'CCMExchangeTLU: weight_clip must be > 0 and finite'
+            return
+        end if
+        if (.not. ieee_is_finite(this % reward_clip) .or. this % reward_clip <= 0.0_rk) then
+            errmsg = 'CCMExchangeTLU: reward_clip must be > 0 and finite'
+            return
+        end if
+        if (.not. ieee_is_finite(this % memory_decay) .or. this % memory_decay < 0.0_rk .or. &
+            this % memory_decay >= 1.0_rk) then
+            errmsg = 'CCMExchangeTLU: memory_decay must lie on [0, 1)'
+            return
+        end if
+    end function check_ccm_exchange_tlu
+
+    ! Stopping validation: fail early with a useful message on bad inputs.
+    subroutine validate_ccm_exchange_tlu(this)
+        class(Config_CCMExchangeTLU), intent(in) :: this
+        character(len=:), allocatable :: errmsg
+
+        errmsg = this % check_ccm_exchange_tlu()
+        if (len(errmsg) > 0) error stop errmsg
+    end subroutine validate_ccm_exchange_tlu
 
     ! Read the configuration from 'in.nml' for Conservative Exchange Market simulation
     subroutine read_nml_conservative_exchange_market(this)

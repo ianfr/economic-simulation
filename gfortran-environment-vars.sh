@@ -3,6 +3,8 @@
 # Make sure that GFORT_CONDA_ENV is defined before running this script
 # e.g. with export GFORT_CONDA_ENV=$HOME/miniconda3/envs/gfortran or GFORT_CONDA_ENV=$HOME/anaconda3/envs/gfortran
 
+export GFORT_CONDA_ENV=${GFORT_CONDA_ENV:-$CONDA_PREFIX}
+
 ### Put the compiler path in FPM_FC
 export FPM_FC=$GFORT_CONDA_ENV/bin/gfortran
 export FPM_CC=$GFORT_CONDA_ENV/bin/gcc

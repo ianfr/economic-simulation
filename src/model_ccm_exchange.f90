@@ -57,12 +57,15 @@ contains
 
         select type (cfg)
         type is (Config_CCMExchange)
+            ! Validate the configured saving propensities before use
+            call cfg % validate()
+
             call init_rng(cfg % seed)
             allocate (this % pop(cfg % n_agents))
             do i = 1, cfg % n_agents
                 this % pop(i) % cash = cfg % init_cash
                 call random_number(rnd_prop_uni)
-                this % pop(i) % saving_propensity = (rnd_prop_uni * (cfg % max_saving_propensity - cfg % min_saving_propensity + 1)) + cfg % min_saving_propensity
+                this % pop(i) % saving_propensity = rnd_prop_uni * (cfg % max_saving_propensity - cfg % min_saving_propensity) + cfg % min_saving_propensity
             end do
             this % n_steps = cfg % n_steps
             this % write_every = cfg % write_every
@@ -72,8 +75,13 @@ contains
             allocate (this % names(1))
             this % names(1) = 'gini_coefficient'
 
-            ! Instantiate the parallel RNG
-            call this%rng%set_seed((/89732_int64, 1892342989_int64/)) ! TODO update
+            ! Seed the parallel RNG from the configured seed (scalar -> 2-word state).
+            ! A zero seed means "no user seed": fall back to a random seed.
+            if (cfg % seed == 0) then
+                call this%rng%set_random_seed()
+            else
+                call this%rng%set_seed([cfg % seed, ieor(cfg % seed, -7046029254386353131_int64)])
+            end if
 #ifdef _OPENMP
             call this%prng%init_parallel(omp_get_max_threads(), this%rng)
 #else
@@ -98,8 +106,6 @@ contains
         real(rk) :: exchange_result(2)
         real(rk) :: exchange_matrix(2, 2)
         real(rk), allocatable :: eps(:)
-        integer               :: n, tid ! for parallel RNG
-        TYPE(RNG_T) rng_local
 
         ! Generate the random set of pairs of agents
         print*, "Generating pairs..."

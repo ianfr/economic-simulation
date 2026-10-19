@@ -16,7 +16,9 @@ module sim_factory_m
     use model_ccm_exchange_m
     use model_conservative_exchange_market_m
     use model_stochastic_preferences_m
+#ifdef BOLTZ_USE_COARRAY
     use model_co_simple_exchange_m
+#endif
     implicit none
 
 contains
@@ -47,7 +49,11 @@ contains
         case ('StochasticPreferences')
             allocate (sim, source=StochasticPreferences())
         case ('CoSimpleExchange') ! Coarray-accelerated
+#ifdef BOLTZ_USE_COARRAY
             allocate (sim, source=CoSimpleExchange())
+#else
+            error stop 'CoSimpleExchange requires a coarray-enabled build'
+#endif
         case default
             error stop 'Unknown simulation type: '//trim(sim_type)
         end select

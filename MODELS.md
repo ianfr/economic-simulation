@@ -68,8 +68,8 @@ Configuration parameters:
 - `init_cash`: Initial cash amount for each agent
 - `debt_limit`: Maximum debt allowed (0.0 = debt-free)
 - `exchange_delta`: Amount to exchange between agents (default 1.0)
-- `min_saving_propensity`: Minimum individual saving propensity (default 0.1)
-- `max_saving_propensity`: Maximum individual saving propensity (default 0.9)
+- `min_saving_propensity`: Minimum individual saving propensity, required, must lie on [0, 1]
+- `max_saving_propensity`: Maximum individual saving propensity, required, must lie on [0, 1]
 - `seed`: Random seed for reproducibility
 - `write_every`: Frequency of CSV output (every N steps)
 

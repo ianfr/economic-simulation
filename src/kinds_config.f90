@@ -77,12 +77,14 @@ module config_m
         real(rk)       :: init_cash = 100.0_rk
         real(rk)       :: debt_limit = 0.0_rk  ! Maximum debt allowed (0.0 = debt-free)
         real(rk)       :: exchange_delta = 1.0_rk  ! Amount to exchange between agents
-        real(rk)       :: min_saving_propensity = 0.1_rk  ! Minimum individual saving propensity
-        real(rk)       :: max_saving_propensity = 0.9_rk  ! Maximum individual saving propensity
+        ! No default: required namelist inputs. The sentinel fails validate() unless overwritten.
+        real(rk)       :: min_saving_propensity = -1.0_rk  ! Minimum individual saving propensity on [0, 1]
+        real(rk)       :: max_saving_propensity = -1.0_rk  ! Maximum individual saving propensity on [0, 1]
         integer(int64) :: seed = 0
         integer(int64) :: write_every = 1000
     contains
         procedure :: read_nml => read_nml_ccm_exchange
+        procedure :: validate => validate_ccm_exchange
     end type Config_CCMExchange
 
     ! Configuration type for CEM (Conservative Exchange Market) simulations
@@ -250,8 +252,10 @@ contains
         logical :: nml_exists
         integer(int64) :: n_agents, n_steps, seed, write_every
         real(rk) :: init_cash, debt_limit, exchange_delta
+        real(rk) :: min_saving_propensity, max_saving_propensity
 
-        namelist /run/ n_agents, n_steps, init_cash, debt_limit, exchange_delta, seed, write_every
+        namelist /run/ n_agents, n_steps, init_cash, debt_limit, exchange_delta, &
+            min_saving_propensity, max_saving_propensity, seed, write_every
 
         inquire (file='in.nml', exist=nml_exists)
 
@@ -262,6 +266,8 @@ contains
             init_cash = this % init_cash
             debt_limit = this % debt_limit
             exchange_delta = this % exchange_delta
+            min_saving_propensity = this % min_saving_propensity
+            max_saving_propensity = this % max_saving_propensity
             seed = this % seed
             write_every = this % write_every
 
@@ -275,10 +281,28 @@ contains
             this % init_cash = init_cash
             this % debt_limit = debt_limit
             this % exchange_delta = exchange_delta
+            this % min_saving_propensity = min_saving_propensity
+            this % max_saving_propensity = max_saving_propensity
             this % seed = seed
             this % write_every = write_every
         end if
+
+        ! Saving propensities must be valid regardless of whether in.nml exists
+        call this % validate()
     end subroutine read_nml_ccm_exchange
+
+    ! Validate the CCM saving propensities, which are required namelist inputs:
+    ! unset values keep the out-of-range sentinel above and fail here.
+    subroutine validate_ccm_exchange(this)
+        class(Config_CCMExchange), intent(in) :: this
+
+        if (this % min_saving_propensity < 0.0_rk .or. this % min_saving_propensity > 1.0_rk) &
+            error stop 'min_saving_propensity is required in in.nml and must lie on [0, 1]'
+        if (this % max_saving_propensity < 0.0_rk .or. this % max_saving_propensity > 1.0_rk) &
+            error stop 'max_saving_propensity is required in in.nml and must lie on [0, 1]'
+        if (this % min_saving_propensity > this % max_saving_propensity) &
+            error stop 'min_saving_propensity must be <= max_saving_propensity'
+    end subroutine validate_ccm_exchange
 
     ! Read the configuration from 'in.nml' for Conservative Exchange Market simulation
     subroutine read_nml_conservative_exchange_market(this)

@@ -4,6 +4,8 @@ n_steps  = 1000
 init_cash = 50.0
 debt_limit = 0.0
 exchange_delta = 1.0
+min_saving_propensity = 0.1
+max_saving_propensity = 0.9
 seed = 0
 write_every = 100
 /

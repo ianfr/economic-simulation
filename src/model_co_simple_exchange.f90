@@ -34,6 +34,7 @@
 !     - sync all is used between inbox clear, remote credit writes, and local
 !       inbox application so every image sees a consistent population state.
 !===============================================================
+#ifdef BOLTZ_USE_COARRAY
 module model_co_simple_exchange_m
     use kinds_m
     use abstract_config_m
@@ -54,15 +55,15 @@ module model_co_simple_exchange_m
     ! coarrays cannot be components of a derived type (yet?).
     ! This limits the module to a single active CoSimpleExchange instance,
     ! which is fine for this simulation framework.
-    type(Agent), allocatable :: co_pop(:)[:]
-    real(rk), allocatable :: incoming_credit(:)[:]
+    type(Agent), allocatable :: co_pop(:) [:]
+    real(rk), allocatable :: incoming_credit(:) [:]
 
     ! The concrete simulation class
     type, extends(AbstractSimulator) :: CoSimpleExchange
         integer(int64) :: total_agents = 0
         integer(int64) :: local_n = 0      ! agents owned by this image
         character(len=32), allocatable :: names(:)
-        real(rk) :: debt_limit   = 0.0_rk
+        real(rk) :: debt_limit = 0.0_rk
         real(rk) :: exchange_delta = 1.0_rk
     contains
         ! Override deferred abstract methods
@@ -74,7 +75,7 @@ module model_co_simple_exchange_m
 
         ! Override concrete base-class CSV helpers so only image 1 writes
         procedure :: write_metrics_header => co_write_metrics_header
-        procedure :: write_metrics_csv    => co_write_metrics_csv
+        procedure :: write_metrics_csv => co_write_metrics_csv
 
         ! Private helpers
         procedure, private :: gini_coefficient
@@ -88,24 +89,24 @@ contains
     ! and the remaining (nimg-rem) images hold base agents.
     pure subroutine global_to_local(g, n_total, nimg, img, local_idx)
         integer(int64), intent(in)  :: g, n_total
-        integer,        intent(in)  :: nimg
-        integer,        intent(out) :: img
+        integer, intent(in)  :: nimg
+        integer, intent(out) :: img
         integer(int64), intent(out) :: local_idx
         integer(int64) :: base, rem, nimg64
 
         nimg64 = int(nimg, int64)
-        base   = n_total / nimg64
-        rem    = mod(n_total, nimg64)
+        base = n_total/nimg64
+        rem = mod(n_total, nimg64)
 
-        if (g <= rem * (base + 1_int64)) then
-            img       = int((g - 1_int64) / (base + 1_int64)) + 1
+        if (g <= rem*(base + 1_int64)) then
+            img = int((g - 1_int64)/(base + 1_int64)) + 1
             local_idx = mod(g - 1_int64, base + 1_int64) + 1_int64
         else
             ! adjusted index among the "base-size" images
             block
                 integer(int64) :: g_adj
-                g_adj     = g - rem * (base + 1_int64)
-                img       = int(rem + (g_adj - 1_int64) / base) + 1
+                g_adj = g - rem*(base + 1_int64)
+                img = int(rem + (g_adj - 1_int64)/base) + 1
                 local_idx = mod(g_adj - 1_int64, base) + 1_int64
             end block
         end if
@@ -114,21 +115,21 @@ contains
     !------------------------------------------------------------
     ! Return the inclusive global index range owned by image me.
     pure subroutine local_global_bounds(me, n_total, nimg, g_lo, g_hi)
-        integer,        intent(in)  :: me, nimg
+        integer, intent(in)  :: me, nimg
         integer(int64), intent(in)  :: n_total
         integer(int64), intent(out) :: g_lo, g_hi
         integer(int64) :: base, rem, me64, nimg64
 
         nimg64 = int(nimg, int64)
-        me64   = int(me, int64)
-        base   = n_total / nimg64
-        rem    = mod(n_total, nimg64)
+        me64 = int(me, int64)
+        base = n_total/nimg64
+        rem = mod(n_total, nimg64)
 
         if (me64 <= rem) then
-            g_lo = (me64 - 1_int64) * (base + 1_int64) + 1_int64
+            g_lo = (me64 - 1_int64)*(base + 1_int64) + 1_int64
             g_hi = g_lo + base
         else
-            g_lo = rem * (base + 1_int64) + (me64 - rem - 1_int64) * base + 1_int64
+            g_lo = rem*(base + 1_int64) + (me64 - rem - 1_int64)*base + 1_int64
             g_hi = g_lo + base - 1_int64
         end if
     end subroutine local_global_bounds
@@ -136,42 +137,42 @@ contains
     !------------------------------------------------------------
     subroutine init(this, cfg)
         class(CoSimpleExchange), intent(out) :: this
-        class(AbstractConfig),   intent(in)  :: cfg
+        class(AbstractConfig), intent(in)  :: cfg
         integer(int64) :: i, base, rem
         integer        :: me, nimg
 
-        me   = this_image()
+        me = this_image()
         nimg = num_images()
 
         select type (cfg)
         type is (Config_SimpleExchange)
-            call init_rng(cfg % seed)
+            call init_rng(cfg%seed)
 
-            this % total_agents  = cfg % n_agents
-            this % n_steps       = cfg % n_steps
-            this % write_every   = cfg % write_every
-            this % debt_limit    = cfg % debt_limit
-            this % exchange_delta = cfg % exchange_delta
+            this%total_agents = cfg%n_agents
+            this%n_steps = cfg%n_steps
+            this%write_every = cfg%write_every
+            this%debt_limit = cfg%debt_limit
+            this%exchange_delta = cfg%exchange_delta
 
             ! Compute this image's slice size using the same formula as
             ! global_to_local so that ownership is consistent
-            base = cfg % n_agents / int(nimg, int64)
-            rem  = mod(cfg % n_agents, int(nimg, int64))
+            base = cfg%n_agents/int(nimg, int64)
+            rem = mod(cfg%n_agents, int(nimg, int64))
             if (int(me, int64) <= rem) then
-                this % local_n = base + 1_int64
+                this%local_n = base + 1_int64
             else
-                this % local_n = base
+                this%local_n = base
             end if
 
-            allocate(co_pop(this % local_n)[*])
-            allocate(incoming_credit(this % local_n)[*])
-            do i = 1, this % local_n
-                co_pop(i) % cash = cfg % init_cash
+            allocate (co_pop(this%local_n) [*])
+            allocate (incoming_credit(this%local_n) [*])
+            do i = 1, this%local_n
+                co_pop(i)%cash = cfg%init_cash
             end do
             incoming_credit = 0.0_rk
 
-            allocate(this % names(1))
-            this % names(1) = 'gini_coefficient'
+            allocate (this%names(1))
+            this%names(1) = 'gini_coefficient'
 
         class default
             error stop 'Unsupported config type in CoSimpleExchange init'
@@ -189,44 +190,44 @@ contains
         integer, allocatable :: perm(:), pos(:)
         integer(int64) :: global_lo, global_hi, g, local_i, local_j
 
-        me    = this_image()
-        nimg  = num_images()
-        n_pairs = int(this % total_agents) / 2
+        me = this_image()
+        nimg = num_images()
+        n_pairs = int(this%total_agents)/2
 
         ! All images generate the same permutation (same seed -> same RNG state).
-        allocate(perm(int(this % total_agents)))
-        allocate(pos(int(this % total_agents)))
-        perm = [(k, k = 1, int(this % total_agents))]
+        allocate (perm(int(this%total_agents)))
+        allocate (pos(int(this%total_agents)))
+        perm = [(k, k=1, int(this%total_agents))]
         call shuffle_int(perm)
         do k = 1, size(perm)
             pos(perm(k)) = k
         end do
 
-        call local_global_bounds(me, this % total_agents, nimg, global_lo, global_hi)
+        call local_global_bounds(me, this%total_agents, nimg, global_lo, global_hi)
 
         ! Clear this image's inbox before other images begin depositing credits.
         incoming_credit = 0.0_rk
         sync all
 
         ! Only agents owned by this image are inspected as potential payers.
-        do local_i = 1, this % local_n
+        do local_i = 1, this%local_n
             g = global_lo + local_i - 1_int64
             k = pos(int(g))
 
             ! Ignore unmatched agents when the population size is odd.
-            if (k > 2 * n_pairs) cycle
+            if (k > 2*n_pairs) cycle
 
             ! The agent participates as a payer only when it occupies the odd slot.
             if (mod(k, 2) == 0) cycle
 
-            call global_to_local(int(perm(k + 1), int64), this % total_agents, nimg, owner_j, local_j)
+            call global_to_local(int(perm(k + 1), int64), this%total_agents, nimg, owner_j, local_j)
 
-            if (co_pop(local_i) % cash >= -this % debt_limit + this % exchange_delta) then
-                co_pop(local_i) % cash = co_pop(local_i) % cash - this % exchange_delta
+            if (co_pop(local_i)%cash >= -this%debt_limit + this%exchange_delta) then
+                co_pop(local_i)%cash = co_pop(local_i)%cash - this%exchange_delta
                 if (owner_j == me) then
-                    co_pop(local_j) % cash = co_pop(local_j) % cash + this % exchange_delta
+                    co_pop(local_j)%cash = co_pop(local_j)%cash + this%exchange_delta
                 else
-                    incoming_credit(local_j)[owner_j] = this % exchange_delta
+                    incoming_credit(local_j) [owner_j] = this%exchange_delta
                 end if
             end if
         end do
@@ -234,8 +235,8 @@ contains
         ! Ensure all remote credit notifications are visible before consuming them.
         sync all
 
-        do local_i = 1, this % local_n
-            co_pop(local_i) % cash = co_pop(local_i) % cash + incoming_credit(local_i)
+        do local_i = 1, this%local_n
+            co_pop(local_i)%cash = co_pop(local_i)%cash + incoming_credit(local_i)
         end do
 
         ! Ensure every image has applied its inbox before the next step or output.
@@ -254,17 +255,17 @@ contains
 
         nimg = num_images()
 
-        open(newunit=unit, file=filename, status='replace', action='write', iostat=ios)
+        open (newunit=unit, file=filename, status='replace', action='write', iostat=ios)
         if (ios /= 0) then
-            write(*, '(a,a)') 'Error opening file: ', filename
+            write (*, '(a,a)') 'Error opening file: ', filename
             return
         end if
 
-        write(unit, '(a)') 'agent_id,cash'
+        write (unit, '(a)') 'agent_id,cash'
 
         global_i = 0_int64
-        base = this % total_agents / int(nimg, int64)
-        rem  = mod(this % total_agents, int(nimg, int64))
+        base = this%total_agents/int(nimg, int64)
+        rem = mod(this%total_agents, int(nimg, int64))
 
         do img = 1, nimg
             ! Compute number of agents on image img
@@ -276,20 +277,20 @@ contains
 
             do local_i = 1, owner_local_n
                 global_i = global_i + 1_int64
-                write(unit, '(i0,",",f0.4)') global_i, co_pop(local_i)[img] % cash
+                write (unit, '(i0,",",f0.4)') global_i, co_pop(local_i) [img]%cash
             end do
         end do
 
-        close(unit)
-        write(*, '(a,a)') 'Population data written to: ', filename
+        close (unit)
+        write (*, '(a,a)') 'Population data written to: ', filename
     end subroutine write_population_csv
 
     !------------------------------------------------------------
     function compute_metrics(this) result(metrics)
         class(CoSimpleExchange), intent(in) :: this
         real(rk), allocatable :: metrics(:)
-        allocate(metrics(1))
-        metrics(1) = this % gini_coefficient()
+        allocate (metrics(1))
+        metrics(1) = this%gini_coefficient()
     end function compute_metrics
 
     !------------------------------------------------------------
@@ -297,9 +298,9 @@ contains
         class(CoSimpleExchange), intent(in) :: this
         character(len=32), allocatable :: result_names(:)
         integer :: i
-        allocate(result_names(size(this % names)))
-        do i = 1, size(this % names)
-            result_names(i) = this % names(i)
+        allocate (result_names(size(this%names)))
+        do i = 1, size(this%names)
+            result_names(i) = this%names(i)
         end do
     end function get_metric_names
 
@@ -313,21 +314,21 @@ contains
 
         if (this_image() /= 1) return
 
-        names = this % get_metric_names()
+        names = this%get_metric_names()
 
-        open(newunit=unit, file=filename, status='replace', action='write', iostat=ios)
+        open (newunit=unit, file=filename, status='replace', action='write', iostat=ios)
         if (ios /= 0) then
-            write(*, '(a,a)') 'Error opening metrics file: ', filename
+            write (*, '(a,a)') 'Error opening metrics file: ', filename
             return
         end if
 
-        write(unit, '(a)', advance='no') 'timestep'
+        write (unit, '(a)', advance='no') 'timestep'
         do i = 1, size(names)
-            write(unit, '(a,a)', advance='no') ',', trim(names(i))
+            write (unit, '(a,a)', advance='no') ',', trim(names(i))
         end do
-        write(unit, '()')  ! newline
+        write (unit, '()')  ! newline
 
-        close(unit)
+        close (unit)
     end subroutine co_write_metrics_header
 
     !------------------------------------------------------------
@@ -346,27 +347,27 @@ contains
 
         print *, 'Writing metrics for timestep:', timestep, '...'
 
-        metrics = this % compute_metrics()
+        metrics = this%compute_metrics()
 
-        inquire(file=filename, exist=file_exists)
+        inquire (file=filename, exist=file_exists)
         if (file_exists) then
-            open(newunit=unit, file=filename, status='old', position='append', action='write', iostat=ios)
+            open (newunit=unit, file=filename, status='old', position='append', action='write', iostat=ios)
         else
-            open(newunit=unit, file=filename, status='new', action='write', iostat=ios)
+            open (newunit=unit, file=filename, status='new', action='write', iostat=ios)
         end if
 
         if (ios /= 0) then
-            write(*, '(a,a)') 'Error opening metrics file: ', filename
+            write (*, '(a,a)') 'Error opening metrics file: ', filename
             return
         end if
 
-        write(unit, '(i0)', advance='no') timestep
+        write (unit, '(i0)', advance='no') timestep
         do i = 1, size(metrics)
-            write(unit, '(a,f0.6)', advance='no') ',', metrics(i)
+            write (unit, '(a,f0.6)', advance='no') ',', metrics(i)
         end do
-        write(unit, '()')  ! newline
+        write (unit, '()')  ! newline
 
-        close(unit)
+        close (unit)
         print *, '...done writing metrics.'
     end subroutine co_write_metrics_csv
 
@@ -381,11 +382,11 @@ contains
         integer(int64) :: global_i, local_i, owner_local_n, base, rem
 
         nimg = num_images()
-        allocate(cash_list(this % total_agents))
+        allocate (cash_list(this%total_agents))
 
         global_i = 0_int64
-        base = this % total_agents / int(nimg, int64)
-        rem  = mod(this % total_agents, int(nimg, int64))
+        base = this%total_agents/int(nimg, int64)
+        rem = mod(this%total_agents, int(nimg, int64))
 
         do img = 1, nimg
             if (int(img, int64) <= rem) then
@@ -396,7 +397,7 @@ contains
 
             do local_i = 1, owner_local_n
                 global_i = global_i + 1_int64
-                cash_list(global_i) = co_pop(local_i)[img] % cash
+                cash_list(global_i) = co_pop(local_i) [img]%cash
             end do
         end do
 
@@ -404,3 +405,11 @@ contains
     end function gini_coefficient
 
 end module model_co_simple_exchange_m
+#else
+! Coarray support is not enabled
+! NOTE: the stub needs a distinct module name because fpm discovers modules
+! by scanning source text without evaluating the preprocessor directives.
+module model_co_simple_exchange_stub_m
+    implicit none
+end module model_co_simple_exchange_stub_m
+#endif

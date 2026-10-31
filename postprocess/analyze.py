@@ -653,6 +653,25 @@ def create_stats_plots(config: Dict[str, Any], out_dir: Path):
         print("No files with valid time step format found.")
         return
     
+    # All step files must share the same data columns; a mix (e.g. outputs
+    # from different models in one directory) cannot form a time series, so
+    # warn and exit early instead of plotting misaligned data.
+    schemas = {}
+    for _, csv_file in time_files:
+        try:
+            header = tuple(pd.read_csv(csv_file, nrows=0).columns[1:])
+        except Exception:
+            continue  # Unreadable here; the main loop below reports it.
+        schemas.setdefault(header, []).append(csv_file.name)
+    
+    if len(schemas) > 1:
+        print("WARNING: step files in the output directory do not share the same columns; "
+              "not plotting statistics.")
+        for header, names in sorted(schemas.items(), key=lambda kv: kv[1]):
+            print(f"  Columns {list(header)}: {', '.join(names)}")
+        print("Clean the output directory (one model's outputs per directory) and rerun.")
+        raise SystemExit(1)
+    
     print(f"Creating statistics plots for {len(time_files)} time steps...")
     
     # Collect statistics
